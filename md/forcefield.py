@@ -22,36 +22,89 @@ class ff_zero(object):
         self.ndim = ndim
         pass
     def calc_pot(self,x):
-        return np.zeros((self.natom,self.ndim))
+        return np.zeros((self.natom,self.ndim),dtype=np.float64)
     def calc_frc(self,x):
-        return np.zeros((self.natom,self.ndim)) 
+        return np.zeros((self.natom,self.ndim),dtype=np.float64) 
     
 class ff_harm(object):
     """
     Isotropic harmonic oscillator:
-    U(r) = 1/2 m \omega^2 r&2
+    U(r) = 1/2 k (x - x_0)^2
     """
-    def __init__(self,m,omega,natom,ndim):
+    def __init__(self,natom,ndim,frck,xeq,box_l=None):
         self.natom = natom
         self.ndim = ndim
-        self.m = m
-        self.omega = omega
+        self.frck = frck
+        self.xeq = xeq
+        self.box_l
         pass
+    
     def calc_pot(self,x):
         """
         Calculate Potential energy
         """
-        pot = 0.5 * (self.m) * (self.omega**2) * np.sum(x**2,axis=1)
+        diff = (x - self.xeq)
+
+        if self.box_l != None:
+            diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
+            diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
+        
+        pot =  np.sum( 0.5 * self.frck * diff**2  )
         return pot
     
     def calc_frc(self,x):
         """
         Calculate Force
         """
-        frc = -(self.m) * (self.omega**2) * x
+        diff = (x - self.xeq)
+        
+        if self.box_l != None:
+            diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
+            diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
+            
+        frc =  - self.frck * diff
+        return frc
+
+class ff_anisoharm(object):
+    """
+    Anisotropic harmonic oscillator:
+    U(r) = 1/2 (x - x_0).T @ k @ (x - x_0)
+    """
+    def __init__(self,natom,ndim,frck,xeq,box_l=None):
+        self.natom = natom
+        self.ndim = ndim
+        self.frck = frck
+        self.xeq = xeq
+        self.box_l
+        pass
+    
+    def calc_pot(self,x):
+        """
+        Calculate Potential energy
+        """
+        diff = (x - self.xeq)
+
+        if self.box_l != None:
+            diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
+            diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
+        
+        pot =  0.5 * np.einsum("di,ij,dj->",diff,self.frck,diff)
+        return pot
+    
+    def calc_frc(self,x):
+        """
+        Calculate Force
+        """
+        diff = (x - self.xeq)
+        
+        if self.box_l != None:
+            diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
+            diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
+            
+        frc =  - np.einsum("ij,dj->di",self.frck,diff)
         return frc
     
-class ff_quarticbarrier(object):
+class ff_quartic(object):
     """
     Quartic Potential Energy
     U(x) = C4*x^4 + C3*x^3 + C2*x^2 +C1*x + c0
