@@ -1,6 +1,6 @@
  # -*- coding: utf-8 -*-
 """
-PyGLE
+GLE-Py
 ============
 
 file: forcefield.py
@@ -103,13 +103,111 @@ class ff_anisoharm(object):
             
         frc =  - np.einsum("ij,dj->di",self.frck,diff)
         return frc
+
+class ff_morseZ(object):
+    """
+    Morse Potential - Z-Direction Only
+    U(x) = D  ( 1 - e^(-a (z - z_0)) )^2
+    """
+    def __init__(self,natom, m, D, a, z_0):
+        self.natom = natom
+        self.ndim  = 3
+        
+        self.m = m        
+        self.D = D        
+        self.a = a
+        self.z_0 = z_0
+        pass
+        
+    def calc_pot(self,x):
+        dist = x[:,2] - self.z_0[:,2]
+        pot = self.D * ( 1 - np.exp(-self.a * dist) ) ** 2  
+        return pot
     
+    def calc_frc(self,x):
+        displ = np.zeros((self.natom,self.ndim),dtype=np.float64)
+        displ[:,2] = x[:,2] - self.x_0[:,2]
+        dist = displ[:,2]
+        frc = - 2 * self.D * self.a * \
+            ( np.exp(-self.a * dist) - np.exp(-2*self.a * dist) ) * displ/dist
+        return frc
+    
+class ff_morse1(object):
+    """
+    Morse Potential - Type 1
+    U(x) = D  ( 1 - e^(-a (x - x_0)) )^2
+    """
+    def __init__(self,natom,ndim, m, D, a, x_0):
+        self.natom = natom
+        self.ndim  = ndim
+        
+        self.m = m        
+        self.D = D        
+        self.a = a
+        self.x_0 = x_0
+        pass
+        
+    def calc_pot(self,x):
+        dist = np.linalg.norm(x - self.x_0, axis=1)
+        pot = self.D * ( 1 - np.exp(-self.a * dist) ) ** 2  
+        return pot
+    
+    def calc_frc(self,x):
+        displ = x - self.x_0
+        dist = np.linalg.norm(displ, axis=1)
+        frc = - 2 * self.D * self.a * \
+            ( np.exp(-self.a * dist) - np.exp(-2*self.a * dist) ) * displ/dist
+        return frc
+    
+class ff_morse2(object):
+    """
+    Morse Potential - Type 2
+    U(x) = D  ( e^(-2/a (x - x_0)) - e^(-1/a (x - x_0)) )
+    """
+    def __init__(self,natom,ndim, m, D, a, x_0):
+        """
+        Parameters
+        ----------
+        natom : Int.
+            Number of atoms.
+        ndim : Int.
+            Number of dimensions.
+        m : Numpy array.
+            Mass of Particles.
+        D : Numpy Array.
+            Morse Potential Depth.
+        a : Numpy Array.
+            Morse Potential Width.
+        x_0 : Numpy Array.
+            Location of Potential Minimum.
+        """
+        self.natom = natom
+        self.ndim  = ndim
+        
+        self.m = m        
+        self.D = D        
+        self.a = a
+        self.x_0 = x_0
+        pass
+        
+    def calc_pot(self,x):
+        dist = np.linalg.norm(x - self.x_0, axis=1)
+        pot = self.D * ( np.exp(-2/self.a*dist)  - 2 * np.exp(-1/self.a*dist )  )
+        return pot
+    
+    def calc_frc(self,x):
+        displ = x - self.x_0
+        dist = np.linalg.norm(displ, axis=1)
+        frc = -2*self.D/self.a * \
+            ( np.exp(-1/self.a*dist) - np.exp(-2/self.a*dist) ) * displ/dist
+        return frc
+        
 class ff_quartic(object):
     """
-    Quartic Potential Energy
-    U(x) = C4*x^4 + C3*x^3 + C2*x^2 +C1*x + c0
+    1D Quartic Potential Energy
+    U(x) = C4*x^4 + C3*x^3 + C2*x^2 +C1*x + C0
     """
-    def __init__(self,height,C4,C3,C2,C1,C0,natom,ndim=1):
+    def __init__(self,natom,height,C4,C3,C2,C1,C0):
         self.height = height
         self.C4 = C4
         self.C3 = C3
@@ -119,7 +217,7 @@ class ff_quartic(object):
         self.C0 = C0
 
         self.natom = natom
-        self.ndim = ndim
+        self.ndim = 1
         pass
     
     def calc_freqs(self,x):
@@ -266,3 +364,7 @@ class ff_lennard_jones:
         frc = np.sum(pfrc_sq,axis=1)
         
         return frc
+  
+# To - Do
+class ff_atomic:
+    """ ForceField object for LJ + Coulomb Potential """
