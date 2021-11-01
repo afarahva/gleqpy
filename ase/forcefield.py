@@ -54,7 +54,32 @@ class Harmonic3D(Calculator):
     
     U(x) = - K/2 @ r.r
     """
-    pass
+    
+    implemented_properties = ['energy', 'forces']
+    
+    def __init__(self, frc_k, x_0, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.frc_k = frc_k
+        self.x_0 = x_0
+        
+        
+    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
+        
+        # Initialize Calculator
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.positions
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            displ  = pos - self.x_0
+            energy = 0.5 * np.einsum("di,ij,dj->", displ, self.frc_k, displ)
+            self.results['energy'] = energy
+        
+        #Calculate Forces
+        if 'forces' in properties:
+            displ  = pos - self.x_0
+            forces = -np.einsum("ij,nj->ni", self.frc_k, displ)
+            self.results['forces'] = forces
         
 class MorseZHarmonicXY(Calculator):
     """

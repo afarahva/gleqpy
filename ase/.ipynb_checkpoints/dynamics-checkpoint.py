@@ -15,9 +15,10 @@ class GLD(MolecularDynamics):
     _lgv_version = 4
 
     def __init__(self, atoms, timestep, Amat, Amat_units = "ase",
-                 indices=None, temperature_K=None, temperature=None, 
-                 fixcm=False, trajectory=None, logfile=None, loginterval=1, 
-                 append_trajectory=False, communicator=world):
+                 indicestemperature_K=None, temperature=None, 
+                 fixcm=False, trajectory=None, logfile=None, 
+                 loginterval=1, append_trajectory=False, 
+                 communicator=world):
         """
         Parameters:
 
@@ -64,8 +65,8 @@ class GLD(MolecularDynamics):
             file instead.
             
         communicator: MPI communicator (optional)
-                    Communicator used to distribute random numbers to  tasks.
-                    Default: ase.parallel.world. Set to None to disable.
+                    Communicator used to distribute random numbers to all tasks.
+                    Default: ase.parallel.world. Set to None to disable communication.
         """
         
         
@@ -82,21 +83,19 @@ class GLD(MolecularDynamics):
         
         # Masses
         self.masses = atoms.get_masses()[:, None]
+        self.sqrtmass = np.sqrt( self.masses.copy()[:,None] ) #for GLE timestep
         
         # number of atoms in system
         self.nsys = len(atoms) 
         
         # Assign which atoms to interact with GLE thermostat
         if indices is None:
-            self.indices = np.arange(self.nsys)
+            self.indices = np.arange(nsys)
         else:
             self.indices = indices
             
         # number of GLE thermostated atoms
-        self.ntherm = len(self.indices)
-        
-        # sqrt(mass) for GLE timestep
-        self.sqrtmass = np.sqrt( self.masses.copy()[self.indices,None] )
+        self.ntherm = len(indices)
         
         # Assign MPI communicator
         if communicator is None:
@@ -142,7 +141,7 @@ class GLD(MolecularDynamics):
         else:
             self.Bs = Bs
 
-        self.s = np.zeros((self.ntherm,self.naux,3),dtype=np.float64)
+        self.s = np.zeros((self.nsys,self.naux,3),dtype=np.float64)
     
     def step_aux(self,p):
         s_self = -np.einsum("ij,njd->nid", self.As, self.s)
@@ -167,8 +166,11 @@ class GLD(MolecularDynamics):
         # move momenta half step
         p = atoms.get_momenta()
         p = p + 0.5 * self.dt * forces
-        p[self.indices] = p[self.indices] \
-            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
+        p[self.indices] = p - self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
+        
+        
+        del_p = forces - np.einsum("fj,njd->nd", self.Aps, self.s)
+        p = p + 0.5 * self.dt * del_p
         
         # Move positions whole step
         r = atoms.get_positions()   
@@ -179,7 +181,7 @@ class GLD(MolecularDynamics):
             atoms.set_center_of_mass(old_com)
         
         # Move auxiliary variables full-step
-        self.step_aux(p[self.indices])
+        self.stepaux(p)
         
         # if we have constraints then this will do the first part of the
         # RATTLE algorithm:
@@ -197,10 +199,6 @@ class GLD(MolecularDynamics):
 
         # Second part of RATTLE will be done here:
         # move momenta half step
-        p = atoms.get_momenta()
-        p = p + 0.5 * self.dt * forces
-        p[self.indices] = p[self.indices] \
-            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
-            
-        atoms.set_momenta(p)
+        del_p = ( forces - np.einsum("fj,njd->nd", self.Aps, self.s) )
+        atoms.set_momenta(atoms.get_momenta() + 0.5 * self.dt * del_p)
         return forces
