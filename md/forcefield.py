@@ -3,11 +3,12 @@
 GLE-Py
 ============
 
+submodule: md
 file: forcefield.py
 author: Ardavan Farahvash (MIT)
 
 description: 
-Simple forcefield classes to use with GLE simulation integrators. 
+Simple forcefield classes to use with python GLE simulation integrators. 
 """
 
 import numpy as np

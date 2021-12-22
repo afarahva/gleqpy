@@ -1,5 +1,15 @@
-"""Langevin dynamics class."""
+ # -*- coding: utf-8 -*-
+"""
+GLEPy
+============
 
+submodule: LAMMPS
+file: dynamics.py
+author: Ardavan Farahvash (MIT)
+
+description: 
+GLE thermostat implementation of ASE python package. 
+"""
 import numpy as np
 from numpy.random import normal
 

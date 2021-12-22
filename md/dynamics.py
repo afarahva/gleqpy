@@ -1,8 +1,9 @@
  # -*- coding: utf-8 -*-
 """
-GLEPy
+GLE-Py
 ============
 
+submodule: md
 file: dynamics.py
 author: Ardavan Farahvash (MIT)
 
@@ -10,7 +11,6 @@ description:
 Simple Python Implementation of Molecular Dynamics with Generalized Langevin
 noise.
 """
-
 
 import numpy as np
 import scipy.sparse as sp
@@ -368,8 +368,8 @@ class nve(object):
         self.reporters = reporters
         self.reportints = reportints
         
-        #Create force array
-        self.f_t = np.zeros(self.system.vel.shape,dtype=np.float64)
+        # Set Force Array
+        self.f_t = np.zeros((system.nsys, system.ndim),dtype=np.float64)
         
         pass
     
@@ -400,26 +400,13 @@ class nve(object):
     
     def step(self):
         """
-        Velocity Verlet method. 
+        Single Step of Velocity Verlet method. 
     
-        Parameters
-        ----------
-        system : System Object.
-        forcefield : Forcefield Object.
-        nt : Int
-            Number of timesteps.
-        dt : Float
-            Length of each timestep.
+        Scheme:
+        v_t+1/2 = v_t + a_t * dt/2
+        x_t+1 = x_t + v_t*dt
+        v_t+1 = v_t+1/2 + a_t+1 +*dt/2
         
-        PBC : Bool. (Optional)
-            Whether or not to use periodic boundary conditions.
-        reporters : list of reporter objects, optional
-        reportints : list of reporter intervals, optional
-        
-        Returns
-        -------
-        reporters : list of reporter objects
-            Data saved from simulation in specified reporter objects.
         """
 
         # mass
@@ -459,7 +446,7 @@ class langevin(object):
     Class for integrating langevin dynamics.
     """
     def  __init__(self, system, forcefield, dt, temp, friction, rancoeff=None, 
-                  PBC=False, style=1, reporters=[], reportints=[]):
+                  PBC=False, reporters=[], reportints=[]):
         """
         Parameters
         ----------
@@ -469,21 +456,29 @@ class langevin(object):
             Length of each timestep.
         temp : Float. 
             Temperature.
+            
         friction : Float or 1D Numpy Array. 
             Friction Coefficient
-
+            
+        rancoeff : Float or 1D array, optional 
+            Random Force coefficient, default set using fluctuation-dissipation thm.
+            
         PBC : Bool. 
             Whether or not to use periodic boundary conditions. (Default = False)
+            
         reporters : list of reporter objects, optional
         reportints : list of reporter intervals, optional
         """
         # Set simulation parameters
         self.system = system
-        self.forcefield = forcefield
+        self.ff = forcefield
         self.dt = dt
         self.PBC = PBC
         self.reporters = reporters
         self.reportints = reportints
+        
+        # Set Force Array
+        self.f_t = np.zeros((system.nsys, system.ndim),dtype=np.float64)
         
         # Set Langevin bath parameters
         
@@ -517,45 +512,18 @@ class langevin(object):
         for k in range(len(self.reportints)):
             self.reporters[k].save(self.system.pos,self.system.vel,
                                    self.f_t/self.system.m,self.f_t)
-            
         for i in range(nt):
-            self.step()
+            x_t, v_t, a_t, f_t = self.step()
         
             # Report Simulation Data
             for k in range(len(self.reportints)):
                 if i % self.reportints[k]  == 0:
-                    self.reporters[k].save(self.system.pos,self.system.vel,
-                                           self.f_t/self.system.m,self.f_t)
+                    self.reporters[k].save(x_t,v_t,a_t,f_t)
         pass
                 
     def step(self):
         """
-        Langevin Dynamics with Velocity Verlet algorithm. 
-    
-        Parameters
-        ----------
-        system : System Object.
-        forcefield : Forcefield Object.
-        nt : Int
-            Number of timesteps.
-        dt : Float
-            Length of each timestep.
-        kbT : Float.
-            Thermal Energy.
-        A : Numpy Array or Float.
-            Markovian Friction Kernel.
-        B : Numpy Array or Float.
-            Wiener Multiplier Matrix
-        PBC : Bool. 
-            Whether or not to use periodic boundary conditions.
-            
-        reporters : list of reporter objects, optional
-        reportints : list of reporter intervals, optional
-        
-        Returns
-        -------
-        reporters : list of reporter objects
-            Data saved from simulation in specified reporter objects.
+        Single Step of Langevin integrator. 
         """
         
         nsys  = self.system.nsys
@@ -596,15 +564,15 @@ class langevin(object):
         self.system.pos = x_t.copy()
         self.system.vel = v_t.copy()
         
-        return x_t, v_t, self.f_t, a_t
+        return x_t, v_t, a_t, self.f_t
 
 class gld(object):
     """ 
     Class for integrating Generalized Langevin Dynamics.
     """
     
-    def __init__(self,system, forcefield, dt, temp, As, Avs, Asv, Bs = None, 
-                 style=1, PBC = False, reporters = [], reportints = []):
+    def __init__(self,system, forcefield, dt, temp, As, Avs, Asv, Bs = None,  
+                 PBC = False, reporters = [], reportints = []):
         """
         Parameters
         ----------
@@ -615,10 +583,20 @@ class gld(object):
         dt : Float.
             Length of each timestep.d
         
+        temp : Float.
+            Temperature. (Units are Energy/k_b)
+            
+        As : Numpy Array.
+            Ornstein-Uhlenbeck Drift Matrix
+        Bs : Numpy Array.
+            Ornstein-Uhlenbeck Random Multiplier Matrix
+        Asv : Numpy Array.
+            System -> Auxiliary projection Matrix
+        Asv : Numpy Array.
+            Auxiliary ->  System projection Matrix
+            
         Optional
         ----------
-        style : String. 
-            Deprecated
         PBC : Bool. 
             Whether or not to use periodic boundary conditions, Default=False
         reporters : list of reporter objects
@@ -627,25 +605,31 @@ class gld(object):
         
         #Set General Integration Parameters
         self.system = system
-        self.forcefield = forcefield
+        self.ff = forcefield
         self.dt = dt
-        self.style = style
         self.PBC = PBC
         self.reporters = reporters
         self.reportints = reportints
+        
+        # Set Force Array
+        self.f_t = np.zeros((system.nsys, system.ndim),dtype=np.float64)
         
         #Set Bath Parameters
         self.set_bathparms( temp, As, Avs, Asv, Bs = Bs)
         
         #Set Bath State
-        self.s = np.zeros((system.nsys, self.naux, system.ndim)
+        self.s_t = np.zeros((system.nsys, self.naux, system.ndim)
                           , dtype=np.float64)
+
         pass
             
     def set_bathparms(self, temp, As, Avs, Asv, Bs=None, k0=None):
         """
         Set Ornstein-Uhlenbeck Bath Parameters.
-
+        
+        K(t) = k0. Avs . exp(-As t) . Asv ~ scalar
+        k0 ~ Bs Bs.T / (2 As + As.T) (when As and Bs commute)
+        
         Parameters
         ----------
         As : Numpy Array.
@@ -691,121 +675,74 @@ class gld(object):
         Run dynamics for nt steps.
         """
 
-        self.s = self.ou_verlet(self.system, self.forcefield, nt, self.dt, self.kbT, 
-                       self.As, self.Bs, self.Avs, self.Asv, self.s,
-                       PBC = self.PBC, reporters = self.reporters, 
-                       reportints = self.reportints)
+        #Initial Forces
+        self.f_t = self.ff.calc_frc(self.system.pos)
+        
+        # Report Initial State
+        for k in range(len(self.reportints)):
+            self.reporters[k].save(self.system.pos,self.system.vel,
+                                   self.f_t/self.system.m,self.f_t)
+        for i in range(nt):
+            x_t, v_t, a_t, f_t = self.step()
+        
+            # Report Simulation Data
+            for k in range(len(self.reportints)):
+                if i % self.reportints[k]  == 0:
+                    self.reporters[k].save(x_t,v_t,a_t,f_t)
         pass     
 
-    @staticmethod
-    def ou_verlet(system, forcefield, nt, dt, kbT, As, Bs, Avs, Asv, s0,
-                  PBC = False, reporters = [], reportints = []):
+    def step(self):
         """
-        Ornstein-Uhlenbeck GLD with symplectic Verlet hopping algorithm. 
-        Uses independent baths for each paricle in system.
-    
-        K(t) = k0. Avs . exp(-As t) . Asv ~ scalar
-        k0 ~ Bs Bs.T / (2 As + As.T) (when As and Bs commute)
-        
-        Parameters
-        ----------
-        system : System Object.
-        forcefield : Forcefield Object.
-        nt : Int
-            Number of timesteps.
-        dt : Float
-            Length of each timestep.
-            
-        kbT : Float.
-            Thermal Energy.
-        As : Numpy Array.
-            Ornstein-Uhlenbeck Drift Matrix
-        Bs : Numpy Array.
-            Ornstein-Uhlenbeck Random Multiplier Matrix
-        Asv : Numpy Array.
-            System -> Auxiliary projection Matrix
-        Asv : Numpy Array.
-            Auxiliary ->  System projection Matrix
-        s0 : Numpy Array.
-            Initial values of auxiliary degrees of freedom.
-            
-        reporters : list of reporter objects, optional
-        reportints : list of reporter intervals, optional
-        
-        Returns
-        -------
-        reporters : list of reporter objects
-            Data saved from simulation in specified reporter objects.
+        Single Step of Generalized Langevin dynamics integrator
         """
     
         # Number of atoms/dimensions
-        nsys  = system.nsys
-        ndim  = system.ndim
-        naux  = np.size(Bs,axis=0)
+        nsys  = self.system.nsys
+        ndim  = self.system.ndim
+        naux  = self.np.size(self.Bs,axis=0)
+        dt = self.dt
         
-        #mass/forcefield
-        m = system.m
+        # mass
+        m = self.system.m
         
         # Create Position Array
-        x_t = system.pos
+        x_t = self.system.pos
         
         # Create Velocity Array
-        v_t = system.vel
-            
-        # Create Force Arrays
-        ff = forcefield
-        f_t = ff.calc_frc(x_t)
-            
-        # Create Auxiliary Particle Arrays
-        s_t = s0
+        v_t = self.system.vel
         
-        # Create Total Force Arrays
-        a_t = np.zeros((nsys,ndim))
+        #Move velocity half-step
+        a_t = self.f_t/m - np.einsum("fj,njd->nd", self.Avs, self.s_t)
+        v_t = v_t + dt/2.0 * a_t
         
-        # Save Initial State
-        for k in range(len(reportints)):
-            reporters[k].save(x_t,v_t,a_t,f_t)
+        # Move Position full-step
+        x_t = x_t + dt * v_t
+        if self.PBC:
+            x_t = PBCwrap(x_t, self.system.box_l)
             
-        # Run Simulation
-        print("Running Simulation")
-        for i in range(1,nt):
-            # Move velocity half-step
-            a_t = f_t/m - np.einsum("fj,njd->nd", Avs, s_t)
-            v_t = v_t + dt/2.0 * a_t
-            
-            # Move Position full-step
-            x_t = x_t + dt * v_t
-            if PBC:
-                x_t = PBCwrap(x_t, system.box_l)
-            
-            # Calculate Force at new position
-            f_t = ff.calc_frc(x_t)
-            
-            # Move auxiliary variables full-step
-            s_self = -np.einsum("ij,njd->nid", As, s_t)
+        # Calculate Force at new position
+        self.f_t = self.ff.calc_frc(x_t)
         
-            s_sys  = -np.einsum("if,nd->nid", Asv, v_t)
+        # Move auxiliary variables full-step
+        s_self = -np.einsum("ij,njd->nid", self.As, self.s_t)
+        
+        s_sys  = -np.einsum("if,nd->nid", self.Asv, self.v_t)
             
-            noise = np.random.normal(loc=0.0, scale=1.0, size=(nsys,naux,ndim))
-            s_ran = np.einsum("ij,njd->nid",Bs,noise) / np.sqrt(m[:,None])
+        noise = np.random.normal(loc=0.0, scale=1.0, size=(nsys,naux,ndim))
+        s_ran = np.einsum("ij,njd->nid",self.Bs,noise) / np.sqrt(m[:,None])
             
-            s_t = s_t + (dt * s_self) + (dt * s_sys) + (np.sqrt(dt) * s_ran)
+        self.s_t = self.s_t + (dt * s_self) + (dt * s_sys) + (np.sqrt(dt) * s_ran)
     
-            # Move velocity full-step
-            a_t = f_t/m - np.einsum("fj,njd->nd", Avs, s_t)
-            v_t = v_t + dt/2.0 * a_t
+        # Move velocity half-step
+        a_t = self.f_t/m - np.einsum("fj,njd->nd", self.Avs, self.s_t)
+        v_t = v_t + dt/2.0 * a_t
             
-            # # Update System Object
-            system.pos = x_t.copy()
-            system.vel = v_t.copy()
-            
-            # Report
-            for k in range(len(reportints)):
-                if i % reportints[k]  == 0:
-                    reporters[k].save(x_t,v_t,a_t,f_t)
+        # Update System Object
+        self.system.pos = x_t.copy()
+        self.system.vel = v_t.copy()
         
         # Function returns final state of auxiliary variables
-        return s_t
+        return x_t, v_t, a_t, self.f_t
 
 
 if __name__ == "__main__":
