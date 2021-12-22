@@ -26,7 +26,7 @@ class TestPotential(Calculator):
     
         self.results['energy'] = energy
         self.results['forces'] = forces
-        
+
 class ZeroPotential(Calculator):
     """
     Zero (Ideal Gas) Potential
@@ -215,8 +215,15 @@ class MorseZ_MetalAdsorbate(Calculator):
             forces[Mindx,2] = - forces[Aindx,2]
             
             self.results['forces'] = forces
-            
         pass
+    
+class FastLennardJones(Calculator):
+    """
+    12-6 Lennard-Jones Calculator
+    
+    Does not use neighborlists, however does use a faster distance calculator. 
+    """
+    #To-Do IMPLEMENT
     
 class GroupForcefield:
     """
@@ -281,72 +288,7 @@ class GroupForcefield:
             energy += E_calc
             
         return energy
- 
-class GroupCombinationCalculator(Calculator):
-    """
-    Combines different ASE calculators acting on different groups of atoms. 
     
-    """
-    
-    def __init__(self, calcs, groups, atoms=None):
-        """
-        Initialize calculator.
-        
-        Parameters
-        ----------
-        calcs : Array.
-            List of calculators.
-        groups : Array.
-            List of Indices of atoms where each calculators works. 
-        """
-        super().__init__(atoms=atoms)
-    
-        # Check Length of Arguments
-        if len(calcs) == 0:
-            raise ValueError('The value of the calcs must be a list of Calculators')
-            
-        if len(calcs) != len(groups):
-            raise ValueError('Must specify one group of atoms per calc')
-    
-        
-        for calc in calcs:
-            if not isinstance(calc, Calculator):
-                raise ValueError("calcs argument must be a list of ASE calculator objects.")
-    
-        # Set Global Values
-        self.calcs = calcs
-        self.groups = groups
-    
-    def calculate(self, atoms = None, properties=['energy'], system_changes=all_changes):
-        """
-        Sum results from different calculators acting on different groups 
-        of atoms.
-        """
-    
-        # Initialize Calculator
-        super().calculate(atoms, properties, system_changes)
-    
-        # Each calculator only acts on a subset of atoms specified in group
-        # This loop sums of energy/forces specified by each subset of atoms
-        for calc, group in zip(self.calcs, self.groups):
-            calc.calculate(atoms[group], properties, system_changes)
-            
-        # Check properties are implemented
-        for prop in properties:
-            if prop not in calc.implemented_properties:
-                raise PropertyNotImplementedError("")
-
-    
-    def reset(self):
-        """Clear all previous results recursively from all of the calculators."""
-        super().reset()
-    
-        for calc in self.calcs:
-            calc.reset()
-
-    def __str__(self):
-        calculators = ', '.join(calc.__class__.__name__ for calc in self.calcs)
-        return '{}({})'.format(self.__class__.__name__, calculators)
 
 if __name__ == "__main__":
     from ase import units
@@ -365,18 +307,4 @@ if __name__ == "__main__":
     
     calc1 = MorseZ_MetalAdsorbate([0],[1], D=2.0, a=1.0, atoms=atoms)
     calc2 = TestPotential(Ftest = [1,0,0], Etest = 1, atoms=atoms[0:1])
-    calc = GroupCombinationCalculator([calc1,calc2],[[0,1],[0]])
-    atoms.calc = calc
-    MaxwellBoltzmannDistribution(atoms, temp=1)
-    
-    atoms.calc.calculate(atoms)
-    print(atoms.calc.results['forces'])
-    print(atoms.calc.results['energy'])
-        
-    # traj = Trajectory('md.traj', 'w', atoms)
-    # dyn = VelocityVerlet(atoms, dt=1.0)
-    # dyn.attach(MDLogger(dyn, atoms, 'md.log', header=True, peratom=True, mode="w"), interval=1)
-    # dyn.attach(traj.write, interval=1)
-    # dyn.run(1000)  # take 1000 steps
-
 
