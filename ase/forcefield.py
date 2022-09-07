@@ -52,34 +52,89 @@ class Harmonic3D(Calculator):
     """
     3-Dimensional, Anisotropic Harmonic Oscillator
     
-    U(x) = - K/2 @ r.r
+    U(r) = (r - r0).T @ K/2 @ (r - r0)
+    F(r) = - K @ (r - r0) 
     """
     
     implemented_properties = ['energy', 'forces']
     
-    def __init__(self, frc_k, x_0, **kwargs):
+    def __init__(self, frc_k, x_0, cell_dim, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.frc_k = frc_k
         self.x_0 = x_0
+        self.cell_dim = cell_dim
         
         
     def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
         
         # Initialize Calculator
         Calculator.calculate(self, atoms, properties, system_changes)
-        pos = self.atoms.positions
+        pos = self.atoms.get_positions()
         
         #Calculate Energy
         if 'energy' in properties:
             displ  = pos - self.x_0
-            energy = 0.5 * np.einsum("di,ij,dj->", displ, self.frc_k, displ)
+            self.PBCwrap(displ)
+            energy = 0.5 * np.einsum("ki,ij,kj->", displ, self.frc_k, displ)
             self.results['energy'] = energy
         
         #Calculate Forces
         if 'forces' in properties:
             displ  = pos - self.x_0
-            forces = -np.einsum("ij,nj->ni", self.frc_k, displ)
+            self.PBCwrap(displ)
+            forces = -np.einsum("ij,kj->ki", self.frc_k, displ)
             self.results['forces'] = forces
+            
+    def PBCwrap(self,displ):
+        displ = np.where( displ > self.cell_dim/2.0, displ - self.cell_dim, displ)
+        displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
+        return displ
+    
+class Hessian3D(Calculator):
+    """
+    3-Dimensional, Anisotropic Harmonic Oscillator
+    
+    U(r) = (r - r0).T @ K/2 @ (r - r0)
+    F(r) = - K @ (r - r0) 
+    """
+    
+    implemented_properties = ['energy', 'forces']
+    
+    def __init__(self, frc_k, x_0, cell_dim, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.frc_k = frc_k
+        self.x_0 = x_0
+        self.cell_dim = cell_dim
+        
+        
+    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
+        
+        # Initialize Calculator
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.get_positions()
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            displ  = pos - self.x_0
+            self.PBCwrap(displ)
+            displ = displ.flatten()
+            energy = 0.5 * np.einsum("i,ij,j->", displ, self.frc_k, displ)
+            self.results['energy'] = energy
+        
+        #Calculate Forces
+        if 'forces' in properties:
+            displ  = pos - self.x_0
+            self.PBCwrap(displ)
+            displ = displ.flatten()
+            forces = -np.einsum("ij,j->i", self.frc_k, displ)
+            forces = forces.reshape(-1,3)
+            self.results['forces'] = forces
+            
+    def PBCwrap(self,displ):
+        displ = np.where( displ > self.cell_dim/2.0, displ - self.cell_dim, displ)
+        displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
+        return displ
+
         
 class MorseZHarmonicXY(Calculator):
     """
@@ -212,6 +267,171 @@ class MorseZ_MetalAdsorbate(Calculator):
     
             expf = np.exp(-a * (disp_AM[:,2] - z0) )
             forces[Aindx,2] = - 2 * D * a * ( expf  - expf**2 )
+            forces[Mindx,2] = - forces[Aindx,2]
+            
+            self.results['forces'] = forces
+        pass
+
+# Calculator for Morse Interaction between Metal atoms and Adsorbates
+class LJZ_MetalAdsorbate(Calculator):
+    """
+    ASE Calculator class for interaction between a metal and adsorbate. 
+    
+    Morse Potential in Z-axis, Harmonic Well in X-Y Plane. 
+    
+        
+    U(z) = D  ( 1 - e^(-a (z_A - z_M)) )^2
+    U(y) = k_y/2 (y_A - y_M)^2
+    U(x) = k_x/2 (x_A - x_M)^2
+    
+    """
+    implemented_properties = ['energy', 'forces']
+    default_parameters = {'sigma': 1.0,
+                          'epsilon': 6.0,
+                          'kx': 1.0,
+                          'ky': 1.0}
+
+    def __init__(self, Ads_indx, Met_indx, **kwargs):
+        """
+        Specify indices of adsorbate and metal atoms to calculate interaction between. 
+        
+        i.e. if interaction is between one adsorbate and two metal atoms
+        Mindx = [9,12]
+        Aindx = [1,1]
+
+        Parameters
+        ----------
+        Aindx : Array.
+            Adsorbate Indices.
+        Mindx : Array.
+            Metal Indices.
+
+        """
+        self.Aindx = Ads_indx
+        self.Mindx = Met_indx
+        Calculator.__init__(self, **kwargs)
+        
+    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
+        
+        # Initialize Calculator
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.positions
+        
+        kx = self.parameters.kx
+        ky = self.parameters.ky
+        sig = self.parameters.sigma
+        eps = self.parameters.epsilon
+        
+        Aindx = self.Aindx
+        Mindx = self.Mindx
+        
+        Mpos = pos[Mindx]
+        Apos = pos[Aindx]
+        
+        # Calculate Displacement
+        disp_AM = Apos - Mpos
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            energy_x = kx/2 * ( disp_AM[:,0] ) ** 2
+            energy_y = ky/2 * ( disp_AM[:,1] ) ** 2
+            energy_z = 4 * eps * ( (sig/disp_AM[:,2])**12 - (sig/disp_AM[:,2])**6 ) 
+            energy = np.sum( energy_x + energy_y + energy_z )
+            self.results['energy'] = energy
+        
+        if 'forces' in properties:
+            #Calculate Forces
+            forces  = np.zeros((len(self.atoms), 3))
+            
+            forces[Aindx,0] = -kx * disp_AM[:,0]
+            forces[Mindx,0] = -forces[Aindx,0]
+            
+            forces[Aindx,1] = -ky * disp_AM[:,1]
+            forces[Mindx,1] = -forces[Aindx,1]
+    
+            forces[Aindx,2] = 36 * eps * sig**12/(disp_AM[:,2])**11 - 24 * eps * sig**6/(disp_AM[:,2]**5)
+            forces[Mindx,2] = - forces[Aindx,2]
+            
+            self.results['forces'] = forces
+        pass
+    
+# Calculator for Morse Interaction between Metal atoms and Adsorbates
+class Harm_MetalAdsorbate(Calculator):
+    """
+    ASE Calculator class for interaction between a metal and adsorbate. 
+    
+    Morse Potential in Z-axis, Harmonic Well in X-Y Plane. 
+    
+    U(z) = k_z/2 (z_A - z_M)^2
+    U(y) = k_y/2 (y_A - y_M)^2
+    U(x) = k_x/2 (x_A - x_M)^2
+
+    """
+    implemented_properties = ['energy', 'forces']
+    default_parameters = {'z0': 1.0,
+                          'kx': 1.0,
+                          'ky': 1.0,
+                          'kz': 1.0}
+
+    def __init__(self, Ads_indx, Met_indx, **kwargs):
+        """
+        Specify indices of adsorbate and metal atoms to calculate interaction between. 
+        
+        i.e. if interaction is between one adsorbate and two metal atoms
+        Mindx = [9,12]
+        Aindx = [1,1]
+
+        Parameters
+        ----------
+        Aindx : Array.
+            Adsorbate Indices.
+        Mindx : Array.
+            Metal Indices.
+
+        """
+        self.Aindx = Ads_indx
+        self.Mindx = Met_indx
+        Calculator.__init__(self, **kwargs)
+        
+    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
+        
+        # Initialize Calculator
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.positions
+        
+        kx = self.parameters.kx
+        ky = self.parameters.ky
+        kz = self.parameters.kz
+        z0 = self.parameters.z0
+        
+        Aindx = self.Aindx
+        Mindx = self.Mindx
+        
+        Mpos = pos[Mindx]
+        Apos = pos[Aindx]
+        
+        # Calculate Displacement
+        disp_AM = Apos - Mpos
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            energy_x = kx/2 * ( disp_AM[:,0] ) ** 2
+            energy_y = ky/2 * ( disp_AM[:,1] ) ** 2
+            energy_z = kz/2 * ( disp_AM[:,2] - z0) ** 2
+            energy = np.sum( energy_x + energy_y + energy_z )
+            self.results['energy'] = energy
+        
+        if 'forces' in properties:
+            #Calculate Forces
+            forces  = np.zeros((len(self.atoms), 3))
+            
+            forces[Aindx,0] = -kx * disp_AM[:,0]
+            forces[Mindx,0] = -forces[Aindx,0]
+            
+            forces[Aindx,1] = -ky * disp_AM[:,1]
+            forces[Mindx,1] = -forces[Aindx,1]
+    
+            forces[Aindx,2] = - kz * ( disp_AM[:,2] - z0)
             forces[Mindx,2] = - forces[Aindx,2]
             
             self.results['forces'] = forces

@@ -10,17 +10,18 @@ Numpy arrays.
 
 import numpy as np
 import numpy.polynomial.polynomial as poly
+from scipy.signal import correlate as spcorrelate
 
-def calc_tcf(obs1,obs2,max_t,stride=1):
+def calc_tcf(obs1, obs2, max_t, stride=1, mode="direct"):
     """
     Compute time correlation function between two observables up to a max_t
 
     Parameters
     ----------
     obs1 : Numpy Array.
-        First Observable. (nt,natom,3)
+        First Observable. (nt,nDoF)
     obs2 : Numpy Array.
-        Second Observable. (nt,natom,3)
+        Second Observable. (nt,nDoF)
     max_t : Int
         Maximum time to compute tcf.
 
@@ -28,17 +29,29 @@ def calc_tcf(obs1,obs2,max_t,stride=1):
     -------
     tcf : Numpy Array.
         Time Correlation Function.
-
     """
+    
     nt = np.size(obs1,axis=0)
-    natom = np.size(obs1,axis=1)
+    nDoF = np.size(obs1,axis=1)
 
-    tcf = np.zeros((max_t//stride,natom),dtype=np.float64)
-    i = 0
-    for t in range(0,max_t,stride):
-        tcf_t = 1.0/(nt - t) * np.einsum("tjd,tjd->j",obs1[t:],obs2[0:nt-t])
-        tcf[i,:] = tcf_t
-        i += 1
+    tcf = np.zeros((max_t//stride,nDoF),dtype=np.float64)
+    
+    #use direct method
+    if mode == "direct":
+        i = 0
+        for t in range(0,max_t,stride):
+            tcf_t = 1.0/(nt - t) * np.sum(obs1[t:] * obs2[0:nt-t], axis=0)
+            tcf[i,:] = tcf_t
+            i += 1
+            
+    elif mode == "fft" or mode=="scipy":
+        for i in range(nDoF):
+            corr = spcorrelate(obs1[:,i],obs2[:,i],mode="same")[nt//2 : nt//2 + max_t : stride]
+            tcf[:,i] = corr/np.arange(nt,nt-max_t,-1)
+            
+            
+    else:
+        raise ValueError("mode must be either direct or fft")
 
     return tcf
 
