@@ -319,7 +319,7 @@ class GLD_Aniso(MolecularDynamics):
         self.ntherm = len(self.indices)
         
         # sqrt(mass) for GLE timestep
-        self.sqrtmass = np.sqrt( self.masses.copy()[self.indices,None] )
+        self.sqrtmass = np.sqrt( self.masses.copy()[self.indices] )
         
         # Assign MPI communicator
         if communicator is None:
@@ -434,11 +434,11 @@ class GLD_Aniso(MolecularDynamics):
         p = p + 0.5 * self.dt * forces
         
         p[self.indices,0] = p[self.indices,0] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,0])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
         p[self.indices,1] = p[self.indices,1] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,1])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
         p[self.indices,2] = p[self.indices,2] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,2])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
         
         # move positions whole step
         r = atoms.get_positions()   
@@ -471,11 +471,11 @@ class GLD_Aniso(MolecularDynamics):
         p = p + 0.5 * self.dt * forces
         
         p[self.indices,0] = p[self.indices,0] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,0])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
         p[self.indices,1] = p[self.indices,1] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,1])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
         p[self.indices,2] = p[self.indices,2] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,2])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,2])
             
         atoms.set_momenta(p)
         return forces
