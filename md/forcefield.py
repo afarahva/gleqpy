@@ -37,7 +37,7 @@ class ff_harm(object):
         self.ndim = ndim
         self.frck = frck
         self.xeq = xeq
-        self.box_l
+        self.box_l = box_l
         pass
     
     def calc_pot(self,x):
@@ -46,7 +46,7 @@ class ff_harm(object):
         """
         diff = (x - self.xeq)
 
-        if self.box_l != None:
+        if self.box_l is not None:
             diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
             diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
         
@@ -59,7 +59,7 @@ class ff_harm(object):
         """
         diff = (x - self.xeq)
         
-        if self.box_l != None:
+        if self.box_l is not None:
             diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
             diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
             
@@ -76,7 +76,7 @@ class ff_anisoharm(object):
         self.ndim = ndim
         self.frck = frck
         self.xeq = xeq
-        self.box_l
+        self.box_l = box_l
         pass
     
     def calc_pot(self,x):
@@ -85,7 +85,7 @@ class ff_anisoharm(object):
         """
         diff = (x - self.xeq)
 
-        if self.box_l != None:
+        if self.box_l is not None:
             diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
             diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
         
@@ -98,7 +98,7 @@ class ff_anisoharm(object):
         """
         diff = (x - self.xeq)
         
-        if self.box_l != None:
+        if self.box_l is not None:
             diff = np.where(diff > self.box_l/2, diff-self.box_l, diff)
             diff = np.where(diff < -self.box_l/2, diff+self.box_l, diff)
             

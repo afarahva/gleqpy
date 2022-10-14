@@ -218,7 +218,6 @@ class GLD(MolecularDynamics):
         # migrate during force calculations, and the momenta need to
         # migrate along with the atoms.
         atoms.set_momenta(p, apply_constraint=False)
-
         forces = atoms.get_forces(md=True)
 
         # Second part of RATTLE will be done here:
@@ -404,19 +403,19 @@ class GLD_Aniso(MolecularDynamics):
         # Move X-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_x, self.s[:,:,0])
         s_sys  = -np.einsum("if,n->ni", self.Asp_x, p[:,0])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_x, noise[:,:,0]) * self.sqrtmass
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_x, noise[:,:,0]) * self.sqrtmass
         self.s[:,:,0] = self.s[:,:,0] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         # Move Y-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_y, self.s[:,:,1])
         s_sys  = -np.einsum("if,n->ni", self.Asp_y, p[:,1])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_y, noise[:,:,1]) * self.sqrtmass
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_y, noise[:,:,1]) * self.sqrtmass
         self.s[:,:,1] = self.s[:,:,1] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         # Move Z-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_z, self.s[:,:,2])
         s_sys  = -np.einsum("if,n->ni", self.Asp_z, p[:,2])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_z, noise[:,:,2]) * self.sqrtmass
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_z, noise[:,:,2]) * self.sqrtmass
         self.s[:,:,2] = self.s[:,:,2] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         pass
@@ -449,7 +448,6 @@ class GLD_Aniso(MolecularDynamics):
             atoms.set_center_of_mass(old_com)
         
         # move auxiliary variables full-step
-        
         self.step_aux(p[self.indices])
         
         # if we have constraints then this will do the first part of the
@@ -463,7 +461,6 @@ class GLD_Aniso(MolecularDynamics):
         # migrate during force calculations, and the momenta need to
         # migrate along with the atoms.
         atoms.set_momenta(p, apply_constraint=False)
-
         forces = atoms.get_forces(md=True)
             
         # move momenta half step
@@ -475,7 +472,7 @@ class GLD_Aniso(MolecularDynamics):
         p[self.indices,1] = p[self.indices,1] \
             - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
         p[self.indices,2] = p[self.indices,2] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,2])
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
             
         atoms.set_momenta(p)
         return forces

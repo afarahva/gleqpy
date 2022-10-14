@@ -899,15 +899,17 @@ class GLD_Aniso(object):
         # Assign a bunch of useful variables
         self.nsys  = self.system.nsys
         self.ndim  = 3
-        self.naux  = np.size(self.Bs_x,axis=0)
-        self.m = self.system.m
+        
+        self.m_2D = self.system.m.reshape(self.system.nsys,1)
+        self.m_1D = self.system.m.flatten()
         
         # Set Force Array
         self.f_t = np.zeros((system.nsys, system.ndim),dtype=np.float64)
         
         # Set Bath Parameters
         self.set_bathparms( temp, bath_param_x, bath_param_y, bath_param_z)
-        
+        self.naux  = np.size(self.Bs_x,axis=0)
+
         # Set Bath State
         self.s_t = np.zeros((system.nsys, self.naux, 3), dtype=np.float64)
         pass
@@ -990,9 +992,9 @@ class GLD_Aniso(object):
         a_t = np.zeros((self.nsys,self.ndim),dtype=np.float64)
         
         #Move velocity half-step
-        a_t[:,0] = self.f_t[:,0]/self.m - np.einsum("fj,nj->n", self.Avs_x, self.s_t[:,:,0])
-        a_t[:,1] = self.f_t[:,1]/self.m - np.einsum("fj,nj->n", self.Avs_y, self.s_t[:,:,1])
-        a_t[:,2] = self.f_t[:,2]/self.m - np.einsum("fj,nj->n", self.Avs_z, self.s_t[:,:,2])
+        a_t[:,0] = self.f_t[:,0]/self.m_1D - np.einsum("fj,nj->n", self.Avs_x, self.s_t[:,:,0])
+        a_t[:,1] = self.f_t[:,1]/self.m_1D - np.einsum("fj,nj->n", self.Avs_y, self.s_t[:,:,1])
+        a_t[:,2] = self.f_t[:,2]/self.m_1D - np.einsum("fj,nj->n", self.Avs_z, self.s_t[:,:,2])
         v_t = v_t + self.dt/2.0 * a_t
 
         
@@ -1013,35 +1015,32 @@ class GLD_Aniso(object):
         # Move X auxiliary variables full-step
         s_self = -np.einsum("ij,nj->ni", self.As_x, self.s_t[:,:,0])
         s_sys  = -np.einsum("if,n->ni", self.Asv_x, v_t[:,0])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_x,noise[:,:,0]) / np.sqrt(self.m[:,None])
+        s_ran = np.einsum("ij,nj->ni",self.Bs_x,noise[:,:,0]) / np.sqrt(self.m_2D)
             
-        self.s_t[:,:,0] = self.s_t[:,0,0] + (self.dt * s_self) + (self.dt * s_sys) 
-        + (np.sqrt(self.dt) * s_ran)
+        self.s_t[:,:,0] = self.s_t[:,:,0] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         # Move Y auxiliary variables full-step
         s_self = -np.einsum("ij,nj->ni", self.As_y, self.s_t[:,:,1])
         s_sys  = -np.einsum("if,n->ni", self.Asv_y, v_t[:,1])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_y,noise[:,:,1]) / np.sqrt(self.m[:,None])
+        s_ran = np.einsum("ij,nj->ni",self.Bs_y,noise[:,:,1]) / np.sqrt(self.m_2D)
             
-        self.s_t[:,:,1] = self.s_t[:,:,1] + (self.dt * s_self) + (self.dt * s_sys) 
-        + (np.sqrt(self.dt) * s_ran)
+        self.s_t[:,:,1] = self.s_t[:,:,1] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         # Move Z auxiliary variables full-step
         s_self = -np.einsum("ij,nj->ni", self.As_z, self.s_t[:,:,2])
         s_sys  = -np.einsum("if,n->ni", self.Asv_z, v_t[:,2])
-        s_ran = np.einsum("ij,nj->ni",self.Bs_z,noise[:,:,2]) / np.sqrt(self.m[:,None])
+        s_ran = np.einsum("ij,nj->ni",self.Bs_z,noise[:,:,2]) / np.sqrt(self.m_2D)
             
-        self.s_t[:,:,2] = self.s_t[:,:,2] + (self.dt * s_self) + (self.dt * s_sys) 
-        + (np.sqrt(self.dt) * s_ran)
+        self.s_t[:,:,2] = self.s_t[:,:,2] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
         
         ##############################################################
         ##############################################################
         ##############################################################
         
         # Move velocity half-step
-        a_t[:,0] = self.f_t[:,0]/self.m - np.einsum("fj,nj->n", self.Avs_x, self.s_t[:,:,0])
-        a_t[:,1] = self.f_t[:,1]/self.m - np.einsum("fj,nj->n", self.Avs_y, self.s_t[:,:,1])
-        a_t[:,2] = self.f_t[:,2]/self.m - np.einsum("fj,nj->n", self.Avs_z, self.s_t[:,:,2])
+        a_t[:,0] = self.f_t[:,0]/self.m_1D - np.einsum("fj,nj->n", self.Avs_x, self.s_t[:,:,0])
+        a_t[:,1] = self.f_t[:,1]/self.m_1D - np.einsum("fj,nj->n", self.Avs_y, self.s_t[:,:,1])
+        a_t[:,2] = self.f_t[:,2]/self.m_1D - np.einsum("fj,nj->n", self.Avs_z, self.s_t[:,:,2])
         v_t = v_t + self.dt/2.0 * a_t
             
         # Update System Object
@@ -1112,7 +1111,6 @@ class GLD_Harmonic(object):
         # Coupling Matrices
         # C = imodes @ Dqp
         # iC = Dpq @ modes
-
 
         # Inverse Bath Hessian in normal mode and site basis
         iDqq = modes @ np.diag(ifreq2) @  imodes

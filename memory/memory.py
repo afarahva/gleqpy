@@ -107,6 +107,9 @@ def calc_memory_fft(vel_tcf, frc_tcf, dt):
     memory : Numpy Array.
         Memory Kernel. K(t)
     """
+    if len(vel_tcf.shape) > 1 or len(frc_tcf.shape) > 1:
+        raise ValueError("TCF input must be 1D Numpy Array")
+        
     #Calculate fourier transforms of velocity/force autocorrelation functions
     vel_matrix_fft = np.fft.fft(vel_tcf)
     frc_matrix_fft = np.fft.fft(frc_tcf)
@@ -139,6 +142,9 @@ def calc_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
     memory : Numpy Array.
         Memory Kernel. K(t)
     """
+    if len(vel_tcf.shape) > 1 or len(frc_tcf.shape) > 1:
+        raise ValueError("TCF input must be 1D Numpy Array")
+        
     ##### Parameters
     Nt = np.size(vel_tcf)
 
@@ -192,6 +198,10 @@ def calc_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     memory : Numpy Array.
         Memory Kernel. K(t)
     """
+    
+    if len(dvel_tcf.shape) > 1 or len(dfrc_tcf.shape) > 1:
+        raise ValueError("TCF input must be a 1D Numpy Array")
+        
     ##### Parameters
     Nt = np.size(dvel_tcf)
     
