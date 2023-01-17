@@ -15,182 +15,9 @@ noise.
 import numpy as np
 import scipy.sparse as sp
 
-########## Calculation Tools
+# Set Boltzmann COnstant
 global kb
 kb = 1
-
-def matrixexp(mat,t):
-    """
-    Calculate Time-Dependent Matrix Exponential of a General Matrix
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    assert np.size(mat,axis=0) == np.size(mat,axis=1)
-
-    nt = np.size(t)
-    ndim = np.size(mat,axis=0)
-    indx = np.arange(ndim)
-    
-    
-    eige, eigv = np.linalg.eig(mat)
-    diag = np.zeros((nt, ndim,ndim),dtype=np.complex128)
-    diag[:,indx,indx] = np.exp( np.outer(t,eige) )
-                   
-    mexp = eigv @ diag @ np.linalg.inv(eigv)
-    return mexp
-
-def matrixexpH(mat,t):
-    """
-    Calculate Time-Dependent Matrix Exponential of a Hermitian Matrix
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    assert np.size(mat,axis=0) == np.size(mat,axis=1)
-    nt = np.size(t)
-    ndim = np.size(mat,axis=0)
-    indx = np.arange(ndim)
-    
-    eige, eigv = np.linalg.eigh(mat)
-    
-    diag = np.zeros((nt, ndim,ndim),dtype=np.float64)
-    diag[:,indx,indx] = np.exp( np.outer(t,eige) )
-                   
-    mexp = eigv @ diag @ eigv.T
-    return mexp
-
-def matrixfunc(func, mat, t):
-    """
-    Calculate Time-Dependent Matrix Function
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    assert np.size(mat,axis=0) == np.size(mat,axis=1)
-    nt = np.size(t)
-    ndim = np.size(mat,axis=0)
-    indx = np.arange(ndim)
-    
-    
-    eige, eigv = np.linalg.eig(mat)
-    diag = np.zeros((nt, ndim,ndim),dtype=np.complex128)
-    diag[:,indx,indx] = func( np.outer(t,eige) )
-                   
-    mfunc = eigv @ diag @ np.linalg.inv(eigv)
-    return mfunc
-
-def matrixfuncH(func, mat, t):
-    """
-    Calculate Time-Dependent Matrix Function of Hermitian Matrix
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    assert np.size(mat,axis=0) == np.size(mat,axis=1)
-    nt = np.size(t)
-    ndim = np.size(mat,axis=0)
-    indx = np.arange(ndim)
-    
-    
-    eige, eigv = np.linalg.eigh(mat)
-    diag = np.zeros((nt, ndim,ndim),dtype=np.float64)
-    diag[:,indx,indx] = func( np.outer(t,eige) )
-                   
-    mfunc = eigv @ diag @ eigv.T
-    return mfunc
-
-def matrix_cos(modes, freq, t, mode="H"):
-    """
-    Calculate Time-Dependent Sine Function of Hermitian Matrix
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    Ndof = np.size(freq)
-    Nt = np.size(t)
-    
-    indx = np.arange(Ndof)
-    M = np.zeros((Nt,Ndof,Ndof),dtype=np.float64)
-    M[:,indx,indx] = np.cos( np.outer(t, freq ) ) 
-    if mode in ["H", "h", "hermitian"]:
-        M = modes @ M @ modes.T
-    else:
-        M = modes @ M @ np.linalg.inv(modes)
-    return M
-
-def matrix_sin(modes, freq, t, mode="H"):
-    """
-    Calculate Time-Dependent Sine Function of Hermitian Matrix
-
-    Parameters
-    ----------
-    mat : Numpy Array. (ndim,dim)
-        Matrix.
-    t : Numpy Array. (nt)
-        Timesteps.
-
-    Returns
-    -------
-    mexp : Numpy Array. (nt,ndim,ndim)
-        Matrix Exponential.
-    """
-    Ndof = np.size(freq)
-    Nt = np.size(t)
-    
-    indx = np.arange(Ndof)
-    M = np.zeros((Nt,Ndof,Ndof),dtype=np.float64)
-    M[:,indx,indx] = np.sin( np.outer(t, freq ) ) 
-    if mode in ["H", "h", "hermitian"]:
-        M = modes @ M @ modes.T
-    else:
-        M = modes @ M @ np.linalg.inv(modes)
-    return M
 
 ########## Simulation Tools
 
@@ -371,69 +198,6 @@ class reporter_PosVelAccFrc(object):
         a_out = np.array(self.a_arr)
         f_out = np.array(self.f_arr)
         return x_out, v_out, a_out, f_out
-
-def calc_ou_var(B, A, nt, dt, Avs = None, Asv = None, method="full"):
-    """
-    Calculate the stationary variance of the Multivariate Ornstein-Uhlenbeck Process
-
-    Parameters
-    ----------
-    B : Numpy Array. - (naux,naux)
-        White Noise Multiplier Matrix
-    A : Numpy Array. - (naux,naux)
-        Deterministic Evolution matrix
-    nt : Int.
-        Number of Simulation Timesteps.
-    dt : Float.
-        Step length.
-        
-    Avs : Numpy Array, optional - (nsys,naux)
-        Auxiliary -> Momentum Projeciton Matrix. The defualt is None.
-    Asv : Numpy Array, optional - (nsys,naux)
-        Momentum -> Auxiliary Projeciton Matrix. The defualt is None.
-    method : String, optional
-        How to calculate MSD. The default is "full".
-
-    Returns
-    -------
-    statvar : Numpy Array. - (nsys,nsys)
-        Variance of projected Ornstein-Uhlenbeck process.
-    """
-    
-    tmax = nt * dt
-    t_arr = np.arange(0,tmax,dt)
-    
-    naux  = np.size(B, axis=0)
-        
-    if type(Avs) != np.ndarray:
-        Avs = np.identity(naux)
-        
-    if type(Asv) != np.ndarray:
-        Asv = np.identity(naux)
-    
-    #If operators A, A.T, B, and B.T don't commute, use Lyapunov Formula
-    # c = Avs @ \int_0^t e^(-A t) B B.T e^(-A.T t) dt @ Asv
-    if method == "full":
-            # Calculate Matrix Exponential
-            A_mexp = matrixexp(-A,t_arr)
-            
-            # Calculate B @ B.T
-            B_sq = B @ B.T
-            integrand = A_mexp @ B_sq @ A_mexp.swapaxes(1,2)
-            var0 = np.trapz(integrand, t_arr, axis=0)
-            statvar = np.real( Avs @ var0 @ Asv ) # stationary variance
-        
-    #If operators A, A.T, B, and B.T do commute
-    elif method == "commuting":
-            B_sq = B.dot(B.T)
-            A_inv = np.linalg.solve(A + A.T, np.identity(naux))
-            var0  = A_inv @ B_sq 
-            statvar = Avs @ var0 @ Asv # stationary variance
-        
-    else:
-        raise ValueError("method argument must be either 'full' or 'commuting' ")
-        
-    return statvar
 
 ########## Simulation Integrators
 class NVE(object):
@@ -1050,167 +814,168 @@ class GLD_Aniso(object):
         # Function returns final state of auxiliary variables
         return r_t, v_t, a_t, self.f_t
 
-class GLD_Harmonic(object):
+# TO-DO
+# class GLD_Harmonic(object):
     
-    def __init__(self, system, nt, dt, Dpp, Dpq, Dqp, Dqq, posp_min, posq_min, 
-                 posq0, velq0, PBC = False):
-        """
+#     def __init__(self, system, nt, dt, Dpp, Dpq, Dqp, Dqq, posp_min, posq_min, 
+#                  posq0, velq0, PBC = False):
+#         """
   
-        """
+#         """
         
-        #Set General Integration Parameters
-        self.system = system
-        self.nt = nt
-        self.dt = dt
-        self.PBC = PBC
+#         #Set General Integration Parameters
+#         self.system = system
+#         self.nt = nt
+#         self.dt = dt
+#         self.PBC = PBC
         
-        # Assign a bunch of useful variables
-        self.nsys  = self.system.nsys
-        self.ndim  = self.system.ndim
-        self.nbath = np.size(Dqq,axis=0)
-        self.m = self.system.m
+#         # Assign a bunch of useful variables
+#         self.nsys  = self.system.nsys
+#         self.ndim  = self.system.ndim
+#         self.nbath = np.size(Dqq,axis=0)
+#         self.m = self.system.m
         
-        # Construct Time Array
-        self.t_arr = np.arange(0,nt*dt,dt)
+#         # Construct Time Array
+#         self.t_arr = np.arange(0,nt*dt,dt)
         
-        # Set Bath Parameters
-        self.set_bathparms(Dpp,Dqp,Dpq,Dqq)
+#         # Set Bath Parameters
+#         self.set_bathparms(Dpp,Dqp,Dpq,Dqq)
         
-        # Minimum Positions
-        self.rp_min = posp_min
-        self.rq_min = posq_min
+#         # Minimum Positions
+#         self.rp_min = posp_min
+#         self.rq_min = posq_min
         
-        # Set Bath Initial Condition
-        self.rq_0 = posq0
-        self.vq_0 = velq0
-        pass
+#         # Set Bath Initial Condition
+#         self.rq_0 = posq0
+#         self.vq_0 = velq0
+#         pass
             
-    def set_bathparms(self,Dpp,Dqp,Dpq,Dqq):
-        """
+#     def set_bathparms(self,Dpp,Dqp,Dpq,Dqq):
+#         """
 
-        """
-        # Diagonalize Bath Hessian
-        freq2, modes = np.linalg.eigh(Dqq)
+#         """
+#         # Diagonalize Bath Hessian
+#         freq2, modes = np.linalg.eigh(Dqq)
         
-        # Massage frequencies and inverse frequencies into arrays
-        freq2 = np.where(freq2 > 0, freq2, 0)
-        ifreq2 = np.where(freq2 == 0, 0, 1/freq2)
-        freq = np.sqrt(freq2)
-        ifreq = np.sqrt(ifreq2)
+#         # Massage frequencies and inverse frequencies into arrays
+#         freq2 = np.where(freq2 > 0, freq2, 0)
+#         ifreq2 = np.where(freq2 == 0, 0, 1/freq2)
+#         freq = np.sqrt(freq2)
+#         ifreq = np.sqrt(ifreq2)
         
-        if np.allclose(Dqq, Dqq.T, rtol=1e-8, atol=1e-12):
-            imodes = modes.T
-            cosWt = matrix_cos(modes, freq, self.t_arr)
-            sinWt = matrix_sin(modes, freq, self.t_arr)
+#         if np.allclose(Dqq, Dqq.T, rtol=1e-8, atol=1e-12):
+#             imodes = modes.T
+#             cosWt = matrix_cos(modes, freq, self.t_arr)
+#             sinWt = matrix_sin(modes, freq, self.t_arr)
 
-        else:
-            imodes = np.linalg.inv(modes)
-            cosWt = matrix_cos(modes, freq, self.t_arr,mode="A")
-            sinWt = matrix_sin(modes, freq, self.t_arr,mode="A")
+#         else:
+#             imodes = np.linalg.inv(modes)
+#             cosWt = matrix_cos(modes, freq, self.t_arr,mode="A")
+#             sinWt = matrix_sin(modes, freq, self.t_arr,mode="A")
 
-        # Coupling Matrices
-        # C = imodes @ Dqp
-        # iC = Dpq @ modes
+#         # Coupling Matrices
+#         # C = imodes @ Dqp
+#         # iC = Dpq @ modes
 
-        # Inverse Bath Hessian in normal mode and site basis
-        iDqq = modes @ np.diag(ifreq2) @  imodes
-        iW = modes @ np.diag(ifreq) @ imodes
+#         # Inverse Bath Hessian in normal mode and site basis
+#         iDqq = modes @ np.diag(ifreq2) @  imodes
+#         iW = modes @ np.diag(ifreq) @ imodes
     
-        # Calculate relevant arrays for bath dynamics
-        self.k_pmf = (Dpp - Dpq @ iDqq @ Dqp)*self.m
-        self.K_mem = (Dpq @ cosWt @ iDqq @ Dqp)*self.m 
-        self.k_rq0 = (Dpq @ cosWt)*self.m
-        self.k_vq0 = (Dpq @ sinWt @ iW)*self.m
-        self.k_rp0 = self.K_mem
-        pass
+#         # Calculate relevant arrays for bath dynamics
+#         self.k_pmf = (Dpp - Dpq @ iDqq @ Dqp)*self.m
+#         self.K_mem = (Dpq @ cosWt @ iDqq @ Dqp)*self.m 
+#         self.k_rq0 = (Dpq @ cosWt)*self.m
+#         self.k_vq0 = (Dpq @ sinWt @ iW)*self.m
+#         self.k_rp0 = self.K_mem
+#         pass
 
-    def conv_integral(self,kernel, signal, dt):
-        """
-        Compute a convolutional integral in real space.
+#     def conv_integral(self,kernel, signal, dt):
+#         """
+#         Compute a convolutional integral in real space.
 
-        Parameters
-        ----------
-        kernel : Numpy Array.
-            Integration Kernel.
-        signal : Numpy Array.
-            Signal to convolute.
-        dt : float
-            time difference.
+#         Parameters
+#         ----------
+#         kernel : Numpy Array.
+#             Integration Kernel.
+#         signal : Numpy Array.
+#             Signal to convolute.
+#         dt : float
+#             time difference.
 
-        """
-        K_flip = np.flip(kernel,axis=0)
-        result = np.trapz(np.einsum("tij,tnj->tni",K_flip,signal),dx=dt,axis=0)
-        return result
+#         """
+#         K_flip = np.flip(kernel,axis=0)
+#         result = np.trapz(np.einsum("tij,tnj->tni",K_flip,signal),dx=dt,axis=0)
+#         return result
     
-    def run(self):
-        """
-        Run dynamics for nt steps.
-        """
+#     def run(self):
+#         """
+#         Run dynamics for nt steps.
+#         """
 
-        # Initial Condition
-        r_t = self.system.pos
-        v_t = self.system.vel
+#         # Initial Condition
+#         r_t = self.system.pos
+#         v_t = self.system.vel
         
-        # Arrays
-        pos_array = [r_t]
-        vel_array = [v_t]
-        frc_array = []
-        f1 = []
-        f2 = []
-        f3 = []
+#         # Arrays
+#         pos_array = [r_t]
+#         vel_array = [v_t]
+#         frc_array = []
+#         f1 = []
+#         f2 = []
+#         f3 = []
         
-        # Run Simulation and Report Data
-        for t in range(self.nt-1):
+#         # Run Simulation and Report Data
+#         for t in range(self.nt-1):
             
-            # Calculate Forces
-            f_det = -np.einsum("ij,nj->ni",self.k_pmf,r_t-self.rp_min)
+#             # Calculate Forces
+#             f_det = -np.einsum("ij,nj->ni",self.k_pmf,r_t-self.rp_min)
             
-            f_memory = -self.conv_integral(
-                self.K_mem[0:t+1], np.array(vel_array), self.dt)
+#             f_memory = -self.conv_integral(
+#                 self.K_mem[0:t+1], np.array(vel_array), self.dt)
             
-            f_rand = -( np.einsum("ij,j->i", self.k_vq0[t], self.vq_0) + 
-                        np.einsum("ij,j->i", self.k_rq0[t], (self.rq_0 - self.rq_min) ) + 
-                        np.einsum("ij,nj->ni", self.k_rp0[t], (pos_array[0] - self.rp_min) ) )
+#             f_rand = -( np.einsum("ij,j->i", self.k_vq0[t], self.vq_0) + 
+#                         np.einsum("ij,j->i", self.k_rq0[t], (self.rq_0 - self.rq_min) ) + 
+#                         np.einsum("ij,nj->ni", self.k_rp0[t], (pos_array[0] - self.rp_min) ) )
 
-            f_t = f_det + f_memory + f_rand
+#             f_t = f_det + f_memory + f_rand
             
-            # Move Velocity half-step
-            v_t = v_t + f_t*self.dt/(2.0*self.m)
+#             # Move Velocity half-step
+#             v_t = v_t + f_t*self.dt/(2.0*self.m)
             
-            # Move Position full-step
-            r_t = r_t + self.dt * v_t
-            if self.PBC:
-                r_t = pbc_wrap(r_t, self.system.box_dim)
+#             # Move Position full-step
+#             r_t = r_t + self.dt * v_t
+#             if self.PBC:
+#                 r_t = pbc_wrap(r_t, self.system.box_dim)
                 
-            # Calculate Force at new position
-            f_det = -np.einsum("ij,nj->ni",self.k_pmf,r_t-self.rp_min)
+#             # Calculate Force at new position
+#             f_det = -np.einsum("ij,nj->ni",self.k_pmf,r_t-self.rp_min)
             
-            f_t = f_det + f_memory + f_rand
-            #print(f_det,f_memory,f_rand)
+#             f_t = f_det + f_memory + f_rand
+#             #print(f_det,f_memory,f_rand)
             
-            # Move velocity another half-step
-            v_t = v_t + f_t*self.dt/(2.0*self.m)
+#             # Move velocity another half-step
+#             v_t = v_t + f_t*self.dt/(2.0*self.m)
             
-            #Append to lists
-            pos_array.append(r_t)
-            vel_array.append(v_t)
-            frc_array.append(f_t)
-            f1.append(f_det)
-            f2.append(f_memory)
-            f3.append(f_rand)
+#             #Append to lists
+#             pos_array.append(r_t)
+#             vel_array.append(v_t)
+#             frc_array.append(f_t)
+#             f1.append(f_det)
+#             f2.append(f_memory)
+#             f3.append(f_rand)
 
-        # Update System Object
-        self.system.pos = r_t.copy()
-        self.system.vel = v_t.copy()
-        pos_array = np.array(pos_array)
-        vel_array = np.array(vel_array)
-        frc_array = np.array(frc_array)
-        f1 = np.array(f1)
-        f2 =  np.array(f2)
-        f3 = np.array(f3)
+#         # Update System Object
+#         self.system.pos = r_t.copy()
+#         self.system.vel = v_t.copy()
+#         pos_array = np.array(pos_array)
+#         vel_array = np.array(vel_array)
+#         frc_array = np.array(frc_array)
+#         f1 = np.array(f1)
+#         f2 =  np.array(f2)
+#         f3 = np.array(f3)
         
-        # Function returns final state of auxiliary variables
-        return pos_array, vel_array, frc_array, f1, f2, f3
+#         # Function returns final state of auxiliary variables
+#         return pos_array, vel_array, frc_array, f1, f2, f3
 
 if __name__ == "__main__":
     pass

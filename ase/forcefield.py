@@ -46,24 +46,32 @@ class ZeroPotential(Calculator):
     
         self.results['energy'] = energy
         self.results['forces'] = forces
-        
-        
-class Harmonic3D(Calculator):
-    """
-    3-Dimensional, Anisotropic Harmonic Oscillator
     
-    U(r) = (r - r0).T @ K/2 @ (r - r0)
-    F(r) = - K @ (r - r0) 
+class Harmonic1D(Calculator):
+    """
+    1-D, Harmonic Oscillator Forcefield
+    
+    U(r) = K/2 @ (x - x0)^2
+    F(r) = - K @ (x - x0) 
     """
     
     implemented_properties = ['energy', 'forces']
     
-    def __init__(self, frc_k, x_0, cell_dim, **kwargs):
+    def __init__(self, axis, frc_k, x_0, cell_dim, **kwargs):
         Calculator.__init__(self, **kwargs)
+        if axis in ["x","X",0]:
+            self.axis=0
+        elif axis in ["y","Y",1]:
+            self.axis=1
+        elif axis in ["z","Z",2]:
+            self.axis=2
+        else:
+            raise ValueError("Axis must be one of x/y/z or 0/1/2")
+
+        self.axis=axis
         self.frc_k = frc_k
         self.x_0 = x_0
         self.cell_dim = cell_dim
-        
         
     def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
         
@@ -90,9 +98,50 @@ class Harmonic3D(Calculator):
         displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
         return displ
     
-class Hessian3D(Calculator):
+class Harmonic3D(Calculator):
     """
-    3-Dimensional, Anisotropic Harmonic Oscillator
+    3D, Ansiotropic Harmonic Oscillator
+    
+    U(r) = (r - r0).T @ K/2 @ (r - r0)
+    F(r) = - K @ (r - r0) 
+    """
+    
+    implemented_properties = ['energy', 'forces']
+    
+    def __init__(self, frc_k, x_0, cell_dim, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.frc_k = frc_k
+        self.x_0 = x_0
+        self.cell_dim = cell_dim
+        
+    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
+        
+        # Initialize Calculator
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.get_positions()
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            displ  = pos - self.x_0
+            self.PBCwrap(displ)
+            energy = 0.5 * np.einsum("ki,ij,kj->", displ, self.frc_k, displ)
+            self.results['energy'] = energy
+        
+        #Calculate Forces
+        if 'forces' in properties:
+            displ  = pos - self.x_0
+            self.PBCwrap(displ)
+            forces = -np.einsum("ij,kj->ki", self.frc_k, displ)
+            self.results['forces'] = forces
+            
+    def PBCwrap(self,displ):
+        displ = np.where( displ > self.cell_dim/2.0, displ - self.cell_dim, displ)
+        displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
+        return displ
+    
+class Hessian(Calculator):
+    """
+    N-Dimensional, Anisotropic Harmonic Potential
     
     U(r) = (r - r0).T @ K/2 @ (r - r0)
     F(r) = - K @ (r - r0) 
@@ -436,14 +485,6 @@ class Harm_MetalAdsorbate(Calculator):
             
             self.results['forces'] = forces
         pass
-    
-class FastLennardJones(Calculator):
-    """
-    12-6 Lennard-Jones Calculator
-    
-    Does not use neighborlists, however does use a faster distance calculator. 
-    """
-    #To-Do IMPLEMENT
     
 class GroupForcefield:
     """

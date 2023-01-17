@@ -37,7 +37,7 @@ class BathProjection(object):
         
         # Mass Array
         if type(masses) != np.ndarray:
-            self.masses = np.ones(3*N) * masses
+            self.masses = np.ones(N) * masses
         elif len(masses) != N:
             self.masses = np.repeat(masses,3)
         else:
@@ -520,34 +520,6 @@ def proj_mori(N, indx_P, cov):
 #     zwanzig = -np.einsum("ij,j->i", modes, (C + iC)/(2*freq2))
     
 #     return P, Q
-
-
-
-# def calc_memory_from_npz(path, dt, stride):
-#     npz = np.load(path)
-#     vel_tcf, dvel_tcf, frc_tcf, dfrc_tcf = npz["vel_tcf"], npz["dvel_tcf"], npz["frc_tcf"], npz["dfrc_tcf"]
-    
-#     vel_tcf_ave = vel_tcf.mean(axis=1)
-#     vel_tcf_x   = vel_tcf[:,0:-2:3].mean(axis=-1)
-#     vel_tcf_y   = vel_tcf[:,1:-1:3].mean(axis=-1)
-#     vel_tcf_z   = vel_tcf[:,2::3].mean(axis=-1)
-    
-#     dvel_tcf_ave = dvel_tcf.mean(axis=1)
-#     dvel_tcf_x   = dvel_tcf[:,0:-2:3].mean(axis=-1)
-#     dvel_tcf_y   = dvel_tcf[:,1:-1:3].mean(axis=-1)
-#     dvel_tcf_z   = dvel_tcf[:,2::3].mean(axis=-1)
-    
-#     dfrc_tcf_ave = dfrc_tcf.mean(axis=1)
-#     dfrc_tcf_x   = dfrc_tcf[:,0:-2:3].mean(axis=-1)
-#     dfrc_tcf_y   = dfrc_tcf[:,1:-1:3].mean(axis=-1)
-#     dfrc_tcf_z   = dfrc_tcf[:,2::3].mean(axis=-1)
-    
-#     Kt_x = mem.calc_memory_dtrapz(dvel_tcf_x, dfrc_tcf_x, vel_tcf_x[0], dt*stride)
-#     Kt_y = mem.calc_memory_dtrapz(dvel_tcf_y, dfrc_tcf_y, vel_tcf_y[0], dt*stride)
-#     Kt_z = mem.calc_memory_dtrapz(dvel_tcf_z, dfrc_tcf_z, vel_tcf_z[0], dt*stride)
-#     Kt_ave = mem.calc_memory_dtrapz(dvel_tcf_ave, dfrc_tcf_ave, vel_tcf_ave[0], dt*stride)
-#     return Kt_x, Kt_y, Kt_z, Kt_ave
-
 
 if __name__ == "__main__":
     pass

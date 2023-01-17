@@ -25,9 +25,9 @@ class GLD(MolecularDynamics):
     _lgv_version = 4
 
     def __init__(self, atoms, timestep, Amat, Amat_units = "ase",
-                 indices=None, temperature_K=None, temperature=None, 
-                 fixcm=False, trajectory=None, logfile=None, loginterval=1, 
-                 append_trajectory=False, communicator=world):
+                 int_type = 0, indices=None, temperature_K=None, 
+                 temperature=None,  fixcm=False, trajectory=None, logfile=None, 
+                 loginterval=1, append_trajectory=False, communicator=world):
         """
         Parameters:
 
@@ -43,6 +43,10 @@ class GLD(MolecularDynamics):
         Amat_units: numpy array.
             Units for friction matrix. Default is 1/(Ase time units).
             Other choices are "ps" for 1/ps or "fs" for 1/fs
+            
+        int_type: int
+            Integrator algorithm to use for GLE. Default is 0 which uses
+            Verlet scheme. 
             
         indices: list (optional)
             indices of atoms in contact with bath. Use *None* 
@@ -108,12 +112,7 @@ class GLD(MolecularDynamics):
         # sqrt(mass) for GLE timestep
         self.sqrtmass = np.sqrt( self.masses.copy()[self.indices,None] )
         
-        # Assign MPI communicator
-        if communicator is None:
-            communicator = DummyMPI()
-        self.communicator = communicator
-        
-        # Convert and Assign Bath Parameters
+        # Convert and Assign GLE Matrices
         if Amat_units == "ase":
             self.set_Amat(Amat, 1.0)
         elif Amat_units == "fs":
@@ -124,6 +123,28 @@ class GLD(MolecularDynamics):
             raise ValueError(" 'Amat_units' must either be ase, ps, or fs")
             
         self.set_Bmat(None,1.0)
+    
+        # Choose integrator algorithm
+        if int_type==0:
+            self.integrator = self.Verlet1
+        elif int_type==1:
+            self.integrator = self.Verlet2
+        # elif int_type==2:
+        #     self.integrator = self.GJF
+        else:
+            message = """"int_type must be either 0, 1
+            0 - Verlet algorithm version 1 (Default)
+            1 - Verlet algorithm version 2"""
+            raise ValueError(message)
+            
+        # Assign MPI communicator
+        if communicator is None:
+            communicator = DummyMPI()
+        self.communicator = communicator
+        
+        # Initialize noise array
+        self.sample_noise()
+        
         pass
 
 
@@ -144,6 +165,7 @@ class GLD(MolecularDynamics):
         Amat = Amat/unit_conv
         
         self.naux = np.size(Amat, axis=0) - 1
+        
         # Break apart A (friction) matrix
         self.Aps = Amat[0:1,1:]
         self.Asp = Amat[1:,0:1]
@@ -168,23 +190,27 @@ class GLD(MolecularDynamics):
         self.Bs = self.Bs/unit_conv
         pass
 
+    def sample_noise(self):
+        self.noise = normal(loc=0.0, scale=1.0, size=(self.ntherm,self.naux,3) )
+        self.communicator.broadcast(self.noise, 0)
+        pass
     
-    def step_aux(self,p):
+    def move_aux(self,p,dt):
         s_self = -np.einsum("ij,njd->nid", self.As, self.s)
     
         s_sys  = -np.einsum("if,nd->nid", self.Asp, p)
         
-        noise = normal(loc=0.0, scale=1.0, size=(self.ntherm,self.naux,3) )
-        self.communicator.broadcast(noise, 0)
-        s_ran = np.einsum("ij,njd->nid",self.Bs,noise) * self.sqrtmass
+        s_ran = np.einsum("ij,njd->nid",self.Bs, self.noise) * self.sqrtmass
         
-        self.s = self.s + (self.dt * s_self) + (self.dt * s_sys) + \
-            (np.sqrt(self.dt) * s_ran)
+        self.s = self.s + (dt * s_self) + (dt * s_sys) + \
+            (np.sqrt(dt) * s_ran)
         pass
-
     
-    def step(self, forces=None):
-
+    def Verlet1(self, forces=None):
+        """
+        Type-1 velocity verlet algorithm. Auxiliary variables are moved with 
+        system positions
+        """
         atoms = self.atoms
 
         if forces is None:
@@ -205,7 +231,8 @@ class GLD(MolecularDynamics):
             atoms.set_center_of_mass(old_com)
         
         # Move auxiliary variables full-step
-        self.step_aux(p[self.indices])
+        self.sample_noise()
+        self.move_aux(p[self.indices],self.dt)
         
         # if we have constraints then this will do the first part of the
         # RATTLE algorithm:
@@ -229,6 +256,76 @@ class GLD(MolecularDynamics):
             
         atoms.set_momenta(p)
         return forces
+    
+    def Verlet2(self, forces=None):
+        """
+        Type-2 velocity verlet algorithm. Auxiliary variables are moved with 
+        system momenta
+        """
+        atoms = self.atoms
+
+        if forces is None:
+            forces = atoms.get_forces(md=True)
+
+        # move momenta half step
+        p_old = atoms.get_momenta()
+        p_new = p_old.copy() + 0.5 * self.dt * forces
+        p_new[self.indices] = p_new[self.indices] \
+            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
+        
+        # move auxiliary variables half-step
+        self.move_aux(p_old[self.indices],self.dt)
+        
+        # Move positions whole step
+        r = atoms.get_positions()   
+        if self.fix_com:
+            old_com = atoms.get_center_of_mass()
+        atoms.set_positions(r + self.dt * p_new / self.masses)
+        if self.fix_com:
+            atoms.set_center_of_mass(old_com)
+        
+        # if we have constraints then this will do the first part of the
+        # RATTLE algorithm:
+            
+        if atoms.constraints:
+            p_new = (atoms.get_positions() - r) * self.masses / self.dt
+
+        # We need to store the momenta on the atoms before calculating
+        # the forces, as in a parallel Asap calculation atoms may
+        # migrate during force calculations, and the momenta need to
+        # migrate along with the atoms.
+        atoms.set_momenta(p_new, apply_constraint=False)
+        forces = atoms.get_forces(md=True)
+
+        # Second part of RATTLE will be done here:
+        # move momenta half step
+        p_old = atoms.get_momenta()
+        p_new = p_old.copy() + 0.5 * self.dt * forces
+        p_new[self.indices] = p_new[self.indices] \
+            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
+                
+        # move auxiliary variables half-step
+        self.sample_noise()
+        self.move_aux(p_old[self.indices],self.dt)
+
+        atoms.set_momenta(p_new)
+        return forces
+    
+        return forces
+    
+    def GJF(self,forces=None):
+        """
+        Grønbech-Jensen and Farago algorithm. Converges better than standard 
+        stochastic Verlet methods. 
+        
+        TO-DO
+        """
+        
+    
+    def step(self, forces=None):
+        forces = self.integrator()
+        return forces
+
 
 class GLD_Aniso(MolecularDynamics):
     """Anisotropic Generalized Langevin (NVT) molecular dynamics."""
@@ -237,7 +334,7 @@ class GLD_Aniso(MolecularDynamics):
     _lgv_version = 4
 
     def __init__(self, atoms, timestep, Amat_list, Amat_units = "ase",
-                 indices=None, temperature_K=None, temperature=None, 
+                 int_type=0, indices=None, temperature_K=None, temperature=None, 
                  fixcm=False, trajectory=None, logfile=None, loginterval=1, 
                  append_trajectory=False, communicator=world):
         """
@@ -255,6 +352,10 @@ class GLD_Aniso(MolecularDynamics):
         Amat_units: numpy array.
             Units for friction matrix. Default is 1/(Ase time units).
             Other choices are "ps" for 1/ps or "fs" for 1/fs
+            
+        int_type: int
+            Integrator algorithm to use for GLE. Default is 0 which uses
+            Verlet scheme. 
             
         indices: list (optional)
             indices of atoms in contact with bath. Use *None* 
@@ -308,7 +409,7 @@ class GLD_Aniso(MolecularDynamics):
         # number of atoms in system
         self.nsys = len(atoms) 
         
-        # Assign which atoms to interact with GLE thermostat
+        # Assign which atoms are thermostatted by GLE
         if indices is None:
             self.indices = np.arange(self.nsys)
         else:
@@ -319,13 +420,8 @@ class GLD_Aniso(MolecularDynamics):
         
         # sqrt(mass) for GLE timestep
         self.sqrtmass = np.sqrt( self.masses.copy()[self.indices] )
-        
-        # Assign MPI communicator
-        if communicator is None:
-            communicator = DummyMPI()
-        self.communicator = communicator
-        
-        # Convert and Assign Bath Parameters
+    
+        # Convert and Assign GLE Matrices
         if Amat_units == "ase":
             self.set_Amat(Amat_list, 1.0)
         elif Amat_units == "fs":
@@ -336,21 +432,51 @@ class GLD_Aniso(MolecularDynamics):
             raise ValueError(" 'Amat_units' must either be ase, ps, or fs")
 
         self.set_Bmat(None, 1.0)
+        
+        # Choose integrator algorith,
+        if int_type==0:
+            self.integrator = self.Verlet1
+        elif int_type==1:
+            self.integrator = self.Verlet2
+        # elif int_type==2:
+        #     self.integrator = self.GJF
+        else:
+            message = """"int_type must be either 0, 1
+            0 - Verlet algorithm version 1 (Default)
+            1 - Verlet algorithm version 2"""
+            raise ValueError(message)
+        
+        # Assign MPI communicator
+        if communicator is None:
+            communicator = DummyMPI()
+        self.communicator = communicator
+        
+        # Initialize noise array
+        self.sample_noise()
         pass
 
     def todict(self):
+        """
+        Returns properties of integrator as dictionary
+        """
         d = MolecularDynamics.todict(self)
         d.update({'temperature_K': self.temp / units.kB,
-                  'Amat': self.Amat, 'Bmat': self.Bmat,
                   'fixcm': self.fix_com})
         return d
 
     def set_temperature(self, temperature_K):
+        """
+        Sets temperature of integrator
+        Input in units of Kelvin. 
+        """
         self.temp = units.kB * self._process_temperature(None, temperature_K, 
                                                          'eV')
         pass
 
     def set_Amat(self, Amat_list, unit_conv):
+        """
+        Sets GLE matrix for each direction.
+        """
         #Convert units
         Amat_x, Amat_y, Amat_z = Amat_list
         Amat_x, Amat_y, Amat_z = Amat_x/unit_conv, Amat_y/unit_conv, Amat_z/unit_conv
@@ -376,6 +502,10 @@ class GLD_Aniso(MolecularDynamics):
         pass
         
     def set_Bmat(self, Bmat_list, unit_conv):
+        """
+        Sets GLE B matrix according according to input to fluctuation-dissip
+        theorem.
+        """
         
         #If no argument is specified default to using cholesky decomposition
         if Bmat_list is None:
@@ -394,35 +524,45 @@ class GLD_Aniso(MolecularDynamics):
         self.Bs_x, self.Bs_y, self.Bs_z = self.Bs_x/unit_conv, self.Bs_y/unit_conv, self.Bs_z/unit_conv
         pass
 
-    
-    def step_aux(self,p):
+    def sample_noise(self):
+        """
+        Sample noise vector
+        """
+        self.noise = normal(loc=0.0, scale=1.0, size=(self.ntherm,self.naux,3) )
+        self.communicator.broadcast(self.noise, 0)
+        pass
         
-        noise = normal(loc=0.0, scale=1.0, size=(self.ntherm,self.naux,3) )
-        self.communicator.broadcast(noise, 0)
+    
+    def move_aux(self, p, dt):
+        """
+        Move auxiliary variables forward in time by dt
+        """
         
         # Move X-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_x, self.s[:,:,0])
         s_sys  = -np.einsum("if,n->ni", self.Asp_x, p[:,0])
-        s_ran  = np.einsum("ij,nj->ni",self.Bs_x, noise[:,:,0]) * self.sqrtmass
-        self.s[:,:,0] = self.s[:,:,0] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_x, self.noise[:,:,0]) * self.sqrtmass
+        self.s[:,:,0] = self.s[:,:,0] + (dt * s_self) + (dt * s_sys) + (np.sqrt(dt) * s_ran)
         
         # Move Y-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_y, self.s[:,:,1])
         s_sys  = -np.einsum("if,n->ni", self.Asp_y, p[:,1])
-        s_ran  = np.einsum("ij,nj->ni",self.Bs_y, noise[:,:,1]) * self.sqrtmass
-        self.s[:,:,1] = self.s[:,:,1] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_y, self.noise[:,:,1]) * self.sqrtmass
+        self.s[:,:,1] = self.s[:,:,1] + (dt * s_self) + (dt * s_sys) + (np.sqrt(dt) * s_ran)
         
         # Move Z-auxiliary variables
         s_self = -np.einsum("ij,nj->ni", self.As_z, self.s[:,:,2])
         s_sys  = -np.einsum("if,n->ni", self.Asp_z, p[:,2])
-        s_ran  = np.einsum("ij,nj->ni",self.Bs_z, noise[:,:,2]) * self.sqrtmass
-        self.s[:,:,2] = self.s[:,:,2] + (self.dt * s_self) + (self.dt * s_sys) + (np.sqrt(self.dt) * s_ran)
+        s_ran  = np.einsum("ij,nj->ni",self.Bs_z, self.noise[:,:,2]) * self.sqrtmass
+        self.s[:,:,2] = self.s[:,:,2] + (dt * s_self) + (dt * s_sys) + (np.sqrt(dt) * s_ran)
         
         pass
-
     
-    def step(self, forces=None):
-
+    def Verlet1(self,forces=None):
+        """
+        Type-1 velocity verlet algorithm. Auxiliary variables are moved with 
+        system positions
+        """
         atoms = self.atoms
 
         if forces is None:
@@ -448,7 +588,8 @@ class GLD_Aniso(MolecularDynamics):
             atoms.set_center_of_mass(old_com)
         
         # move auxiliary variables full-step
-        self.step_aux(p[self.indices])
+        self.sample_noise()
+        self.move_aux(p[self.indices],self.dt)
         
         # if we have constraints then this will do the first part of the
         # RATTLE algorithm:
@@ -475,6 +616,80 @@ class GLD_Aniso(MolecularDynamics):
             - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
             
         atoms.set_momenta(p)
+        return forces
+    
+    def Verlet2(self,forces=None):
+        """
+        Type-2 velocity verlet algorithm. Auxiliary variables are moved with 
+        system momenta
+        """
+        atoms = self.atoms
+
+        if forces is None:
+            forces = atoms.get_forces(md=True)
+
+        # move momenta half-step
+        p_old = atoms.get_momenta()
+        p_new = p_old.copy() + 0.5 * self.dt * forces
+        p_new[self.indices,0] = p_old[self.indices,0] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
+        p_new[self.indices,1] = p_old[self.indices,1] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
+        p_new[self.indices,2] = p_old[self.indices,2] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
+
+        # move auxiliary variables half-step
+        self.move_aux(p_old[self.indices],0.5*self.dt)
+
+        # move positions whole step
+        r = atoms.get_positions()   
+        if self.fix_com:
+            old_com = atoms.get_center_of_mass()
+        atoms.set_positions(r + self.dt * p_new / self.masses)
+        if self.fix_com:
+            atoms.set_center_of_mass(old_com)
+        
+        # if we have constraints then this will do the first part of the
+        # RATTLE algorithm:
+            
+        if atoms.constraints:
+            p_new = (atoms.get_positions() - r) * self.masses / self.dt
+
+        # We need to store the momenta on the atoms before calculating
+        # the forces, as in a parallel Asap calculation atoms may
+        # migrate during force calculations, and the momenta need to
+        # migrate along with the atoms.
+        atoms.set_momenta(p_new, apply_constraint=False)
+        forces = atoms.get_forces(md=True)
+            
+        # move momenta half-step
+        p_old = atoms.get_momenta()
+        p_new = p_old.copy() + 0.5 * self.dt * forces
+        p_new[self.indices,0] = p_old[self.indices,0] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
+        p_new[self.indices,1] = p_old[self.indices,1] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
+        p_new[self.indices,2] = p_old[self.indices,2] \
+            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
+
+        # move auxiliary variables half-step
+        self.sample_noise()
+        self.move_aux(p_old[self.indices],0.5*self.dt)
+        atoms.set_momenta(p_new)
+        
+        return forces
+    
+    def GJF(self,forces=None):
+        """
+        Grønbech-Jensen and Farago algorithm. Converges better than standard 
+        stochastic Verlet methods. 
+        
+        TO-DO
+        """
+        
+    
+    def step(self, forces=None):
+        forces = self.integrator()
         return forces
 
 class Langevin_Custom(MolecularDynamics):
