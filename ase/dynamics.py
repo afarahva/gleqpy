@@ -125,18 +125,8 @@ class GLD(MolecularDynamics):
         self.set_Bmat(None,1.0)
     
         # Choose integrator algorithm
-        if int_type==0:
-            self.integrator = self.Verlet1
-        elif int_type==1:
-            self.integrator = self.Verlet2
-        # elif int_type==2:
-        #     self.integrator = self.GJF
-        else:
-            message = """"int_type must be either 0, 1
-            0 - Verlet algorithm version 1 (Default)
-            1 - Verlet algorithm version 2"""
-            raise ValueError(message)
-            
+        self.integrator = self.Verlet
+
         # Assign MPI communicator
         if communicator is None:
             communicator = DummyMPI()
@@ -161,6 +151,9 @@ class GLD(MolecularDynamics):
         pass
 
     def set_Amat(self, Amat, unit_conv):
+        """
+        Sets GLE friction matrix
+        """
         #convert units
         Amat = Amat/unit_conv
         
@@ -176,7 +169,10 @@ class GLD(MolecularDynamics):
         pass
     
     def set_Bmat(self, Bs, unit_conv):
-
+        """
+        Sets GLE B matrix according according to input to fluctuation-dissip
+        theorem.
+        """
         # Break apart B (Wiener) matrix
         if Bs is None:
             try:
@@ -191,11 +187,17 @@ class GLD(MolecularDynamics):
         pass
 
     def sample_noise(self):
+        """
+        Sample noise vector
+        """
         self.noise = normal(loc=0.0, scale=1.0, size=(self.ntherm,self.naux,3) )
         self.communicator.broadcast(self.noise, 0)
         pass
     
     def move_aux(self,p,dt):
+        """
+        Move auxiliary variables forward in time by dt
+        """
         s_self = -np.einsum("ij,njd->nid", self.As, self.s)
     
         s_sys  = -np.einsum("if,nd->nid", self.Asp, p)
@@ -206,7 +208,7 @@ class GLD(MolecularDynamics):
             (np.sqrt(dt) * s_ran)
         pass
     
-    def Verlet1(self, forces=None):
+    def Verlet(self, forces=None):
         """
         Type-1 velocity verlet algorithm. Auxiliary variables are moved with 
         system positions
@@ -256,70 +258,6 @@ class GLD(MolecularDynamics):
             
         atoms.set_momenta(p)
         return forces
-    
-    def Verlet2(self, forces=None):
-        """
-        Type-2 velocity verlet algorithm. Auxiliary variables are moved with 
-        system momenta
-        """
-        atoms = self.atoms
-
-        if forces is None:
-            forces = atoms.get_forces(md=True)
-
-        # move momenta half step
-        p_old = atoms.get_momenta()
-        p_new = p_old.copy() + 0.5 * self.dt * forces
-        p_new[self.indices] = p_new[self.indices] \
-            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
-        
-        # move auxiliary variables half-step
-        self.move_aux(p_old[self.indices],self.dt)
-        
-        # Move positions whole step
-        r = atoms.get_positions()   
-        if self.fix_com:
-            old_com = atoms.get_center_of_mass()
-        atoms.set_positions(r + self.dt * p_new / self.masses)
-        if self.fix_com:
-            atoms.set_center_of_mass(old_com)
-        
-        # if we have constraints then this will do the first part of the
-        # RATTLE algorithm:
-            
-        if atoms.constraints:
-            p_new = (atoms.get_positions() - r) * self.masses / self.dt
-
-        # We need to store the momenta on the atoms before calculating
-        # the forces, as in a parallel Asap calculation atoms may
-        # migrate during force calculations, and the momenta need to
-        # migrate along with the atoms.
-        atoms.set_momenta(p_new, apply_constraint=False)
-        forces = atoms.get_forces(md=True)
-
-        # Second part of RATTLE will be done here:
-        # move momenta half step
-        p_old = atoms.get_momenta()
-        p_new = p_old.copy() + 0.5 * self.dt * forces
-        p_new[self.indices] = p_new[self.indices] \
-            - 0.5 * self.dt * np.einsum("fj,njd->nd", self.Aps, self.s)
-                
-        # move auxiliary variables half-step
-        self.sample_noise()
-        self.move_aux(p_old[self.indices],self.dt)
-
-        atoms.set_momenta(p_new)
-        return forces
-    
-        return forces
-    
-    def GJF(self,forces=None):
-        """
-        Grønbech-Jensen and Farago algorithm. Converges better than standard 
-        stochastic Verlet methods. 
-        
-        TO-DO
-        """
         
     
     def step(self, forces=None):
@@ -334,7 +272,7 @@ class GLD_Aniso(MolecularDynamics):
     _lgv_version = 4
 
     def __init__(self, atoms, timestep, Amat_list, Amat_units = "ase",
-                 int_type=0, indices=None, temperature_K=None, temperature=None, 
+                 indices=None, temperature_K=None, temperature=None, 
                  fixcm=False, trajectory=None, logfile=None, loginterval=1, 
                  append_trajectory=False, communicator=world):
         """
@@ -352,10 +290,6 @@ class GLD_Aniso(MolecularDynamics):
         Amat_units: numpy array.
             Units for friction matrix. Default is 1/(Ase time units).
             Other choices are "ps" for 1/ps or "fs" for 1/fs
-            
-        int_type: int
-            Integrator algorithm to use for GLE. Default is 0 which uses
-            Verlet scheme. 
             
         indices: list (optional)
             indices of atoms in contact with bath. Use *None* 
@@ -434,17 +368,7 @@ class GLD_Aniso(MolecularDynamics):
         self.set_Bmat(None, 1.0)
         
         # Choose integrator algorith,
-        if int_type==0:
-            self.integrator = self.Verlet1
-        elif int_type==1:
-            self.integrator = self.Verlet2
-        # elif int_type==2:
-        #     self.integrator = self.GJF
-        else:
-            message = """"int_type must be either 0, 1
-            0 - Verlet algorithm version 1 (Default)
-            1 - Verlet algorithm version 2"""
-            raise ValueError(message)
+        self.integrator= self.Verlet
         
         # Assign MPI communicator
         if communicator is None:
@@ -558,7 +482,7 @@ class GLD_Aniso(MolecularDynamics):
         
         pass
     
-    def Verlet1(self,forces=None):
+    def Verlet(self,forces=None):
         """
         Type-1 velocity verlet algorithm. Auxiliary variables are moved with 
         system positions
@@ -617,76 +541,6 @@ class GLD_Aniso(MolecularDynamics):
             
         atoms.set_momenta(p)
         return forces
-    
-    def Verlet2(self,forces=None):
-        """
-        Type-2 velocity verlet algorithm. Auxiliary variables are moved with 
-        system momenta
-        """
-        atoms = self.atoms
-
-        if forces is None:
-            forces = atoms.get_forces(md=True)
-
-        # move momenta half-step
-        p_old = atoms.get_momenta()
-        p_new = p_old.copy() + 0.5 * self.dt * forces
-        p_new[self.indices,0] = p_old[self.indices,0] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
-        p_new[self.indices,1] = p_old[self.indices,1] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
-        p_new[self.indices,2] = p_old[self.indices,2] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
-
-        # move auxiliary variables half-step
-        self.move_aux(p_old[self.indices],0.5*self.dt)
-
-        # move positions whole step
-        r = atoms.get_positions()   
-        if self.fix_com:
-            old_com = atoms.get_center_of_mass()
-        atoms.set_positions(r + self.dt * p_new / self.masses)
-        if self.fix_com:
-            atoms.set_center_of_mass(old_com)
-        
-        # if we have constraints then this will do the first part of the
-        # RATTLE algorithm:
-            
-        if atoms.constraints:
-            p_new = (atoms.get_positions() - r) * self.masses / self.dt
-
-        # We need to store the momenta on the atoms before calculating
-        # the forces, as in a parallel Asap calculation atoms may
-        # migrate during force calculations, and the momenta need to
-        # migrate along with the atoms.
-        atoms.set_momenta(p_new, apply_constraint=False)
-        forces = atoms.get_forces(md=True)
-            
-        # move momenta half-step
-        p_old = atoms.get_momenta()
-        p_new = p_old.copy() + 0.5 * self.dt * forces
-        p_new[self.indices,0] = p_old[self.indices,0] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_x, self.s[:,:,0])
-        p_new[self.indices,1] = p_old[self.indices,1] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_y, self.s[:,:,1])
-        p_new[self.indices,2] = p_old[self.indices,2] \
-            - 0.5 * self.dt * np.einsum("fj,nj->n", self.Aps_z, self.s[:,:,2])
-
-        # move auxiliary variables half-step
-        self.sample_noise()
-        self.move_aux(p_old[self.indices],0.5*self.dt)
-        atoms.set_momenta(p_new)
-        
-        return forces
-    
-    def GJF(self,forces=None):
-        """
-        Grønbech-Jensen and Farago algorithm. Converges better than standard 
-        stochastic Verlet methods. 
-        
-        TO-DO
-        """
-        
     
     def step(self, forces=None):
         forces = self.integrator()
