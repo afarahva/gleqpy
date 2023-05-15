@@ -81,16 +81,17 @@ class Harmonic1D(Calculator):
         
         #Calculate Energy
         if 'energy' in properties:
-            displ  = pos - self.x_0
+            displ  = pos[:,self.axis] - self.x_0
             self.PBCwrap(displ)
-            energy = 0.5 * np.einsum("ki,ij,kj->", displ, self.frc_k, displ)
+            energy = np.sum(0.5 * self.frc_k * displ**2)
             self.results['energy'] = energy
         
         #Calculate Forces
         if 'forces' in properties:
-            displ  = pos - self.x_0
+            displ  = pos[:,self.axis] - self.x_0
             self.PBCwrap(displ)
-            forces = -np.einsum("ij,kj->ki", self.frc_k, displ)
+            forces = np.zeros(pos.shape)
+            forces[:,self.axis] = self.frc_k * displ
             self.results['forces'] = forces
             
     def PBCwrap(self,displ):
@@ -138,51 +139,6 @@ class Harmonic3D(Calculator):
         displ = np.where( displ > self.cell_dim/2.0, displ - self.cell_dim, displ)
         displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
         return displ
-    
-class Hessian(Calculator):
-    """
-    N-Dimensional, Anisotropic Harmonic Potential
-    
-    U(r) = (r - r0).T @ K/2 @ (r - r0)
-    F(r) = - K @ (r - r0) 
-    """
-    
-    implemented_properties = ['energy', 'forces']
-    
-    def __init__(self, frc_k, x_0, cell_dim, **kwargs):
-        Calculator.__init__(self, **kwargs)
-        self.frc_k = frc_k
-        self.x_0 = x_0
-        self.cell_dim = cell_dim
-        
-        
-    def calculate(self, atoms=None, properties=['forces'], system_changes=['positions']):
-        
-        # Initialize Calculator
-        Calculator.calculate(self, atoms, properties, system_changes)
-        pos = self.atoms.get_positions()
-        
-        #Calculate Energy
-        if 'energy' in properties:
-            displ  = pos - self.x_0
-            self.PBCwrap(displ)
-            displ = displ.flatten()
-            energy = 0.5 * np.einsum("i,ij,j->", displ, self.frc_k, displ)
-            self.results['energy'] = energy
-        
-        #Calculate Forces
-        if 'forces' in properties:
-            displ  = pos - self.x_0
-            self.PBCwrap(displ)
-            displ = displ.flatten()
-            forces = -np.einsum("ij,j->i", self.frc_k, displ)
-            forces = forces.reshape(-1,3)
-            self.results['forces'] = forces
-            
-    def PBCwrap(self,displ):
-        displ = np.where( displ > self.cell_dim/2.0, displ - self.cell_dim, displ)
-        displ = np.where( displ < -self.cell_dim/2.0, displ + self.cell_dim, displ)
-        return displ
 
         
 class MorseZHarmonicXY(Calculator):
@@ -203,11 +159,13 @@ class MorseZHarmonicXY(Calculator):
                           'ky': 1.0}
 
     def __init__(self, **kwargs):
+        
+        # Initialize Calculator
         Calculator.__init__(self, **kwargs)
         
     def calculate(self, atoms=None, properties=['energy'], system_changes=['positions']):
         
-        # Initialize Calculator
+        # Calculator Variables
         Calculator.calculate(self, atoms, properties, system_changes)
         pos = self.atoms.positions
         
@@ -233,6 +191,63 @@ class MorseZHarmonicXY(Calculator):
             forces[:,1] - -ky * displ[:,1]
             expf = np.exp(-a * displ[:,2])
             forces[:,2] = - 2 * D * a * ( expf  - expf**2 )
+            self.results['forces'] = forces
+            
+class TabulatedZHarmonicXY(Calculator):
+    """
+    Tabuated Potential in Z-axis, Harmonic Well in X-Y Plane
+    """
+    implemented_properties = ['energy', 'forces']
+    default_parameters = {'kind' : 'slinear',
+                          'r0': [0,0,0],
+                          'kx': 1.0,
+                          'ky': 1.0}
+
+    def __init__(self, tab_potential, tab_z, **kwargs):
+        from scipy.interpolate import interp1d
+
+        # Initialize calculator
+        Calculator.__init__(self, **kwargs)
+        
+        # Create potential interpolator
+        tab_potential = tab_potential - self.parameters.r0[0]
+        
+        self.Uz_f = interp1d(tab_z, tab_potential, 
+                             kind=self.parameters.kind, fill_value="extrapolate")
+        
+        # Create force interpolator
+        tab_force = -1 * np.gradient(tab_potential, tab_z, edge_order=2)
+        self.Fz_f = interp1d(tab_z, tab_force, 
+                             kind=self.parameters.kind, fill_value="extrapolate")
+        
+        
+    def calculate(self, atoms=None, properties=['energy'], system_changes=['positions']):
+        
+        # Calculator Variables
+        Calculator.calculate(self, atoms, properties, system_changes)
+        pos = self.atoms.positions
+        
+        pot_z = self.Uz_f
+        frc_z = self.Fz_f
+        kx = self.parameters.kx
+        ky = self.parameters.ky
+        r0 = self.parameters.r0
+        
+        #Calculate Energy
+        if 'energy' in properties:
+            energy_x = kx/2 * (pos[:,0] - r0[0]) ** 2
+            energy_y = ky/2 * (pos[:,1] - r0[1]) ** 2
+            energy_z = pot_z(pos[:,2]) 
+            energy = np.sum( energy_x + energy_y + energy_z )
+            self.results['energy'] = energy
+        
+        #Calculate Forces
+        if 'forces' in properties:
+            forces  = np.zeros((len(self.atoms), 3))
+            displ = pos - r0
+            forces[:,0] = -kx * displ[:,0]
+            forces[:,1] - -ky * displ[:,1]
+            forces[:,2] = frc_z(pos[:,2])
             self.results['forces'] = forces
 
 # Calculator for Morse Interaction between Metal atoms and Adsorbates

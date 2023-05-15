@@ -545,7 +545,7 @@ class GLD_Aniso(MolecularDynamics):
     def step(self, forces=None):
         forces = self.integrator()
         return forces
-
+    
 class Langevin_Custom(MolecularDynamics):
     """Langevin (constant N, V, T) molecular dynamics."""
 

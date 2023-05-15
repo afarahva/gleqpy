@@ -15,7 +15,7 @@ from scipy.signal import correlate as spcorrelate
 
 ########## Tools for memory extraction from MD snapshots
 
-def calc_tcf(obs1, obs2, max_t, stride=1, mode="direct"):
+def calc_tcf(obs1, obs2, max_t, stride=1, mode="scipy"):
     """
     Compute time correlation function between two observables up to a max_t
 
@@ -27,6 +27,10 @@ def calc_tcf(obs1, obs2, max_t, stride=1, mode="direct"):
         Second Observable. (nt,nDoF)
     max_t : Int
         Maximum time to compute tcf.
+    mode: Str.
+        How to calculate time-correlation function. 
+        Default "fft" or "scipy" (faster).
+        Other option is "direct" for real time method. 
 
     Returns
     -------
