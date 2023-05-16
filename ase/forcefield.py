@@ -91,7 +91,7 @@ class Harmonic1D(Calculator):
             displ  = pos[:,self.axis] - self.x_0
             self.PBCwrap(displ)
             forces = np.zeros(pos.shape)
-            forces[:,self.axis] = self.frc_k * displ
+            forces[:,self.axis] = -self.frc_k * displ
             self.results['forces'] = forces
             
     def PBCwrap(self,displ):
