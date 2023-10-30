@@ -21,7 +21,7 @@ and $\mathbf{R}$ is a correlated stochastic process.
 The figure above compares memory kernels, one that was used as an input for a 
 simulation and others that were extracted by analyzing the data from that simulation.
 
-Pedagogical examples of how to set up, run, and analyze GLE simulations are provided in 
+Pedagogical examples of how to set up, run, and analyze GLE simulations are provided in the 
 *examples* directory.
 
 
