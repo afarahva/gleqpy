@@ -7,7 +7,9 @@ This repo contains tools for the simulation of the generalized Langevin equation
 calculation of memory/friction kernels. 
 
 The GLE is a non-Markovian counterpart to the Langevin equation,
-$$ \mathbf{p} = -\frac{d W}{d \mathbf{x}}(t) - \int_0^t \mathbf{K}(t-\tau) \mathbf{p}(\tau) d\tau + \mathbf{R}(t),$$
+
+$$ \mathbf{p}$$
+
 where $\mathbf{p}$ and $\mathbf{x}$ are the momenta and positions of your system, $W$ is 
 the potential of mean force, $\mathbf{K}$ is the memory kernel (generally a tensor), 
 and $\mathbf{R}$ is a correlated stochastic process. 
