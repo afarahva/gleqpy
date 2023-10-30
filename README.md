@@ -15,7 +15,7 @@ the potential of mean force, $\mathbf{K}$ is the memory kernel (generally a tens
 and $\mathbf{R}$ is a correlated stochastic process. 
 
 <p align="center">
-<img src="" width="500">
+<img src="https://github.com/afarahva/glepy/examples/1D/memory.png" width="500">
 </p>
 
 The figure above compares memory kernels, one that was used as an input for a 
@@ -44,7 +44,8 @@ ase - GLE integrators and helpful forcefields for Atomic Simulation Environment
 
 examples - Helpful examples.
 
-memory - Functions for calculating memory kernels from MD simulations. 
+memory - Functions for calculating memory kernels, and a database for memory kernels 
+calculated from prior simulations. 
 
 md - Python based MD code, useful for testing purposes and building toy simulations. 
 
