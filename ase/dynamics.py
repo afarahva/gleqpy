@@ -547,7 +547,8 @@ class GLD_Aniso(MolecularDynamics):
         return forces
     
 class Langevin_Custom(MolecularDynamics):
-    """Langevin (constant N, V, T) molecular dynamics."""
+    """Langevin (constant N, V, T) molecular dynamics applied to only a subset
+    of the atoms."""
 
     # Helps Asap doing the right thing.  Increment when changing stuff:
     _lgv_version = 5

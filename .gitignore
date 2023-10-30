@@ -1,5 +1,10 @@
 
 *.pyc
+*.traj
+log.lammps
+.DS_Store
+.DS_Store?
+
 testing/
-pmf/
 __pycache__/
+.ipynb_checkpoints/

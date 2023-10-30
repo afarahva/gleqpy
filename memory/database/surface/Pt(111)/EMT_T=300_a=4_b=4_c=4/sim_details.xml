@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<simulation_details>
+    <forcefield>EMT</forcefield>
+    <ffcite>Jacobsen KW, Stoltze P, Nørskov JK. A semi-empirical effective medium theory for metals and alloys. Surface Science. 1996;366(2):394–402. doi:10.1016/0039-6028(96)00816-3</ffcite>
+    <ffcite>Schiøtz J. Standard Effective Medium Theory potential for face-centered cubic metals as implemented in ASE/Asap. [Internet]. OpenKIM; 2015. Available from: https://openkim.org/cite/MO_118428466217_002</ffcite>
+    <lattice_parameters>
+        <elements>Pt</elements>
+        <crystal>fcc</crystal>
+        <facet>111</facet>
+        <Na>4</Na>
+        <Nb>4</Nb>
+        <Nc>4</Nc>
+        <orthogonal>True</orthogonal>
+        <indices_fixed>0, 3, 12, 15</indices_fixed>
+    </lattice_parameters>
+    <simulation_parameters>
+        <equil_steps>25000</equil_steps>
+        <run_steps>4000000</run_steps>
+        <output_interval>5</output_interval>
+    </simulation_parameters>
+</simulation_details>

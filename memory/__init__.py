@@ -1,3 +1,3 @@
-from glepy.memory import memory
-from glepy.memory import projection
-from glepy.memory.memory import *
+from glepy.memory import time
+from glepy.memory import proj
+from glepy.memory import load
