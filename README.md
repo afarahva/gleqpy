@@ -13,7 +13,7 @@ the potential of mean force, $\mathbf{K}$ is the memory kernel (generally a tens
 and $\mathbf{R}$ is a correlated stochastic process. 
 
 <p align="center">
-<img src="https://github.com/garrettj403/SciencePlots/raw/master/examples/figures/fig01.jpg" width="500">
+<img src="" width="500">
 </p>
 
 The figure above compares memory kernels, one that was used as an input for a 
