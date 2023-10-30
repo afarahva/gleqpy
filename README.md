@@ -8,7 +8,7 @@ calculation of memory/friction kernels.
 
 The GLE is a non-Markovian counterpart to the Langevin equation,
 
-$$ \mathbf{p}$$
+$$ \mathbf{p} = -\frac{d W}{d \mathbf{x}}(t) - $$
 
 where $\mathbf{p}$ and $\mathbf{x}$ are the momenta and positions of your system, $W$ is 
 the potential of mean force, $\mathbf{K}$ is the memory kernel (generally a tensor), 
