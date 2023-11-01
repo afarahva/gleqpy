@@ -1,6 +1,7 @@
 
 *.pyc
 *.traj
+*.lammpstrj
 traj.npz
 log.lammps
 .DS_Store
