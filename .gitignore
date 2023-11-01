@@ -1,6 +1,7 @@
 
 *.pyc
 *.traj
+traj.npz
 log.lammps
 .DS_Store
 .DS_Store?
@@ -8,3 +9,6 @@ log.lammps
 testing/
 __pycache__/
 .ipynb_checkpoints/
+vib/
+GLEPy.egg-info/
+dist/
