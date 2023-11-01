@@ -38,12 +38,6 @@ to be installed.
 
 The examples directory contains discusses how to use [LAMMPS](https://www.lammps.org/) to run GLE simulations.
 
-New to the GLE
---------------
-
-New to the GLE? Want a short tutorial on the motivation and formalism? 
-The Mathematica notebook in the **examples** directory contains a helpful guide. 
-
  
 Submodules
 ----------
