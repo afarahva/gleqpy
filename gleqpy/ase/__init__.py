@@ -1,2 +1,2 @@
-from glepy.ase import dynamics
-from glepy.ase import forcefield
+from gleqpy.ase import dynamics
+from gleqpy.ase import forcefield

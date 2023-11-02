@@ -12,8 +12,8 @@ with open(os.path.join(root, 'README.md'), 'r', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='gleqpy',
-    version='1.0.0',
+    name='GLEqPy',
+    version='1.0.3',
     author="Ardavan Farahvash",
     author_email="ardavanf95@gmail.com",
     maintainer="Ardavan Farahvash",
@@ -23,9 +23,8 @@ setup(
     long_description_content_type='text/markdown',
     license="MIT",
     url="https://github.com/afarahva/gleqpy/",
-
     install_requires=['numpy','scipy'],
-    packages=["md","memory","ase"],
+    packages=["gleqpy","gleqpy/ase/","gleqpy/md/","gleqpy/memory/"],
     
     classifiers=[
         'License :: OSI Approved :: MIT License',

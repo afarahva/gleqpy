@@ -11,5 +11,5 @@ testing/
 __pycache__/
 .ipynb_checkpoints/
 vib/
-GLEPy.egg-info/
+*.egg-info/
 dist/
