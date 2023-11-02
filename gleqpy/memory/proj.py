@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-GLEPy
+GLEqPy
 ============
 
+submodule: memory
 file: proj.py
+author: Ardavan Farahvash
+
 description: Functions for calculatig memory kernels using projection operators
 under the harmonic approximaitons.
 """

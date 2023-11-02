@@ -1,4 +1,4 @@
-"""Install GLEPy.
+"""Install GLEqPy.
 
 This script (setup.py) will install the GLEPy package.
 """
@@ -12,7 +12,7 @@ with open(os.path.join(root, 'README.md'), 'r', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='GLEPy',
+    name='gleqpy',
     version='1.0.0',
     author="Ardavan Farahvash",
     author_email="ardavanf95@gmail.com",
@@ -22,7 +22,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     license="MIT",
-    url="https://github.com/afarahva/glepy/",
+    url="https://github.com/afarahva/gleqpy/",
 
     install_requires=['numpy','scipy'],
     packages=["md","memory","ase"],

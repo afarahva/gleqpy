@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GLEPy
+GLEqPy
 ============
 
 file: sim.py
 description: Run ase simulation of a FCC Pt surface slab.
 """
+
 from ase import units, Atoms
 from ase.build import bulk, surface, fcc111
 from ase.constraints import FixAtoms

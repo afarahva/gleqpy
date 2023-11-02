@@ -1,11 +1,11 @@
  # -*- coding: utf-8 -*-
 """
-GLE-Py
+GLEqPy
 ============
 
 submodule: md
 file: forcefield.py
-author: Ardavan Farahvash (MIT)
+author: Ardavan Farahvash
 
 description: 
 Simple forcefield classes to use with python GLE simulation integrators. 

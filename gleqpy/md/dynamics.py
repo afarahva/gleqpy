@@ -1,11 +1,11 @@
  # -*- coding: utf-8 -*-
 """
-GLE-Py
+GLEqPy
 ============
 
 submodule: md
 file: dynamics.py
-author: Ardavan Farahvash (MIT)
+author: Ardavan Farahvash
 
 description: 
 Simple Python Implementation of Molecular Dynamics with Generalized Langevin

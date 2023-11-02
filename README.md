@@ -1,5 +1,5 @@
-GLEPy
-=====
+GLEqPy
+======
 
 *Generalized Langevin Equation with Python*
 
@@ -29,9 +29,11 @@ and GLE for solution phase dynamics with LAMMPS.
 Getting Started
 ---------------
 
-The easiest way to install glepy is by using `pip`.
+The easiest way to install GLEqPy is by using `pip`.
 
-The memory analysis tools only require numpy and scipy.
+`pip install gleqpy`
+
+The memory analysis tools only require `numpy` and `scipy`.
 
 The ase module requires the [Atomic Simulation Environment](https://wiki.fysik.dtu.dk/ase/index.html)
 to be installed.
@@ -56,4 +58,4 @@ Citing glepy
 ------------
 If you use glepy, please cite: 
 
-Farahvash A, Agrawal M, Peterson AA, Willard AP. Modeling Surface Vibrations and Their Role in Molecular Adsorption: A Generalized Langevin Approach. J Chem Theory Comput. 2023 Sep 26;19(18):6452-6460. doi: [10.1021/acs.jctc.3c00473](10.1021/acs.jctc.3c00473). Epub 2023 Sep 8.
+Farahvash A, Agrawal M, Peterson AA, Willard AP. Modeling Surface Vibrations and Their Role in Molecular Adsorption: A Generalized Langevin Approach. J Chem Theory Comput. 2023 Sep 26;19(18):6452-6460. doi: [10.1021/acs.jctc.3c00473](10.1021/acs.jctc.3c00473).

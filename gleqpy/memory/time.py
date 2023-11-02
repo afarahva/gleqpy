@@ -3,7 +3,10 @@
 GLEPy
 ============
 
+submodule: memory
 file: time.py
+author: Ardavan Farahvash
+
 description: Functions for extracting time-correlation functions and memory 
 kernels using numpy arrays.
 """
