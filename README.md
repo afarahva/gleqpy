@@ -8,7 +8,7 @@ the calculation of memory/friction kernels.
 
 The GLE is a non-Markovian counterpart to the Langevin equation,
 
-$$ \mathbf{p} = -\frac{d W}{d \mathbf{x}}(t) - \int_0^t \mathbf{K}(t-\tau) \mathbf{p}(\tau) d\tau + \mathbf{R}(t) $$
+$$ \mathbf{\dot{p}} = -\frac{d W}{d \mathbf{x}}(t) - \int_0^t \mathbf{K}(t-\tau) \mathbf{p}(\tau) d\tau + \mathbf{R}(t) $$
 
 where $\mathbf{p}$ and $\mathbf{x}$ are the momenta and positions of your system, $W$ is 
 the potential of mean force, $\mathbf{K}$ is the memory kernel (generally a tensor), 
@@ -18,8 +18,8 @@ and $\mathbf{R}$ is a correlated stochastic process.
 <img src="https://raw.githubusercontent.com/afarahva/gleqpy/main/examples/1D/memory.png" width="500">
 </p>
 
-The figure above compares memory kernels, one that was used as an input for a 
-simulation and others that were extracted by analyzing the data from that simulation.
+The figure above compares memory kernels, the black line was used as an input for a 
+simulation and blue/green lines were extracted by analyzing the data from that simulation.
 
 Pedagogical examples of how to set up, run, and analyze GLE simulations are provided in the 
 **examples** directory. Examples include toy simulations, GLE for solid dynamics with ASE, 
