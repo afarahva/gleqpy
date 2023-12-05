@@ -54,8 +54,8 @@ calculated from prior simulations.
 **md** - Python based MD code, useful for testing purposes and building toy simulations.
 
 
-Citing glepy
+Citing gleqpy
 ------------
-If you use glepy, please cite: 
+If you use gleqpy, please cite: 
 
 Farahvash A, Agrawal M, Peterson AA, Willard AP. Modeling Surface Vibrations and Their Role in Molecular Adsorption: A Generalized Langevin Approach. J Chem Theory Comput. 2023 Sep 26;19(18):6452-6460. doi: [10.1021/acs.jctc.3c00473](10.1021/acs.jctc.3c00473).
