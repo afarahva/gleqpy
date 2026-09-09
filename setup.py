@@ -24,6 +24,7 @@ setup(
     license="MIT",
     url="https://github.com/afarahva/gleqpy/",
     install_requires=['numpy','scipy'],
+    extras_require={'test': ['pytest', 'ase']},
     packages=["gleqpy","gleqpy/ase/","gleqpy/md/","gleqpy/memory/"],
     
     classifiers=[
