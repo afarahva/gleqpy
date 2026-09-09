@@ -98,7 +98,7 @@ def calc_matrix_tcf(obs1,obs2,max_t,stride=1):
     return tcf
 
 def calc_memory_fft(vel_tcf, frc_tcf, dt):
-    """
+    r"""
     Calculate memory kernel using fourier transform and convolution thm.
     
     <F(t),v(0)> = -\int K(t)<v(t),v(0)>
@@ -132,7 +132,7 @@ def calc_memory_fft(vel_tcf, frc_tcf, dt):
     return memory/dt
 
 def calc_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
-    """
+    r"""
     Calculate memory kernel in real-time using midpoint quadrature.
     
     K(t-0.5) = 1/V(0.5) * [ -F(t)/dt 
@@ -170,7 +170,7 @@ def calc_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
     K = np.zeros(Nt-1,dtype=np.float64)
     
     # Assign initial condition
-    if np.all(K_0) != None:
+    if K_0 is not None:
         K[0] = K_0
     else:
         K[0] = - frc_tcf[1] * vel_tcf_inv0 / dt
@@ -225,7 +225,7 @@ def calc_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     K = np.zeros(Nt,dtype=np.float64)
     
     # Set initial Values
-    if np.all(K_0) != None:
+    if K_0 is not None:
         K[0] = K_0
     else:
         K[0] = -dfrc_tcf[0] * vel_inv0
@@ -251,7 +251,7 @@ def calc_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     return K
 
 def calc_matrix_memory_fft(vel_tcf, frc_tcf, dt):
-    """
+    r"""
     Calculate memory kernel using fourier transform and convolution thm.
     
     <F(t),v(0)> = -\int K(t)<v(t),v(0)>
@@ -282,7 +282,7 @@ def calc_matrix_memory_fft(vel_tcf, frc_tcf, dt):
     return memory/dt
 
 def calc_matrix_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
-    """
+    r"""
     Calculate memory kernel in real-time using midpoint quadrature.
     
     K(t-0.5) = 1/V(0.5) * [ -F(t)/dt 
@@ -318,7 +318,7 @@ def calc_matrix_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
     K = np.zeros((Nt,natom,natom))
     
     # Assign initial condition
-    if np.all(K_0) != None:
+    if K_0 is not None:
         K[0] = K_0
     else:
         K[0] = np.dot( - frc_tcf[1]/dt, vel_tcf_mid0_inv)
@@ -370,7 +370,7 @@ def calc_matrix_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     K = np.zeros((Nt,natom,natom))
     
     # Set initial Values
-    if np.all(K_0) != None:
+    if K_0 is not None:
         K[0] = K_0
     else:
         K[0] = np.dot( -dfrc_tcf[0], vel_inv0 )
@@ -698,7 +698,7 @@ def calc_spectral(signals, scale):
 
 
 class Amatrix(object):
-    """
+    r"""
     Class used to fit memory kernels to a sum of exponentially damped cosines
     and output parameters of the GLE A-matrix. 
     
@@ -756,7 +756,7 @@ class Amatrix(object):
         return self.Amat
 
     def Amat_to_params(self):
-        """
+        r"""
         Converts GLE A-matrix to  damped cosine parameters 
         
         K =  \sum_i a_i * e^(-d t) * cos(w*t)

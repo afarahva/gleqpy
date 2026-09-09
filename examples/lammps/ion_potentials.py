@@ -1,6 +1,6 @@
  # -*- coding: utf-8 -*-
 """
-file: ion.py
+file: ion_potentials.py
 author: Ardavan Farahvash (MIT)
 
 description: 

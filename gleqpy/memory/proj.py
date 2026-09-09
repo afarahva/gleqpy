@@ -182,7 +182,7 @@ class BathProjection(object):
         return K
     
     def calc_spectraldensity(self):
-        """
+        r"""
         Calculate J(\omega) = C.T @ 1/W^2 @ C
 
         Returns
@@ -399,7 +399,7 @@ class BathProjectionCustom(object):
         return K
     
     def calc_spectraldensity(self):
-        """
+        r"""
         Calculate J(\omega) = C.T @ 1/W^2 @ C
 
         Returns

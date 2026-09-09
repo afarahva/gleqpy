@@ -350,8 +350,8 @@ class Langevin(object):
             assert system.nsys == np.size(self.A)
             
         # Set Random Force Coefficients: B
-        # if argument == None, choose B such that it follows F-D thm.
-        if np.all(rancoeff) == None:
+        # if argument is None, choose B such that it follows F-D thm.
+        if rancoeff is None:
             self.B = np.sqrt(2 * self.kbT * self.A)
             
         self.A = self.A[:,None]
