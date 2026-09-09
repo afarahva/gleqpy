@@ -12,8 +12,15 @@ kernels using numpy arrays.
 """
 
 import numpy as np
-from scipy.signal import correlate as spcorrelate
+from scipy.fft import next_fast_len
 from scipy.optimize import curve_fit
+
+# np.trapz was renamed to np.trapezoid in numpy 2.0 (np.trapz is deprecated).
+# Fall back to np.trapz on numpy < 2.0.
+try:
+    from numpy import trapezoid as _trapezoid
+except ImportError:  # numpy < 2.0
+    from numpy import trapz as _trapezoid
 
 
 ########## Tools for time-correlation functions and memory kernel extraction 
@@ -46,22 +53,27 @@ def calc_tcf(obs1, obs2, max_t, stride=1, mode="scipy"):
     nt = np.size(obs1,axis=0)
     nDoF = np.size(obs1,axis=1)
 
-    tcf = np.zeros((max_t//stride,nDoF),dtype=np.float64)
-    
     #use direct method
     if mode == "direct":
+        tcf = np.zeros((max_t//stride,nDoF),dtype=np.float64)
         i = 0
         for t in range(0,max_t,stride):
             tcf_t = 1.0/(nt - t) * np.sum(obs1[t:] * obs2[0:nt-t], axis=0)
             tcf[i,:] = tcf_t
             i += 1
-            
+
     elif mode == "fft" or mode=="scipy":
-        for i in range(nDoF):
-            corr = spcorrelate(obs1[:,i],obs2[:,i],mode="same")[nt//2 : nt//2 + max_t : stride]
-            tcf[:,i] = corr/np.arange(nt,nt-max_t,-1)
-            
-            
+        # Batched, unbiased cross-correlation <obs1(t) obs2(0)> for all DoF at
+        # once via a single real FFT.  Zero-pad to >= nt+max_t-1 (enough to keep
+        # lags 0..max_t-1 free of circular wrap-around) so the transform is no
+        # larger than the lags actually requested.
+        n = next_fast_len(nt + max_t - 1)
+        F1 = np.fft.rfft(obs1, n, axis=0)
+        F2 = np.fft.rfft(obs2, n, axis=0)
+        corr = np.fft.irfft(F1 * np.conj(F2), n, axis=0)[:max_t]
+        corr /= np.arange(nt, nt - max_t, -1)[:, None]  # unbiased normalization
+        tcf = corr[::stride]
+
     else:
         raise ValueError("mode must be either direct or fft")
 
@@ -100,7 +112,7 @@ def calc_matrix_tcf(obs1,obs2,max_t,stride=1):
 def calc_memory_fft(vel_tcf, frc_tcf, dt):
     r"""
     Calculate memory kernel using fourier transform and convolution thm.
-    
+
     <F(t),v(0)> = -\int K(t)<v(t),v(0)>
     K(\omega) = -C_F(\omega) * C_V^{-1}(\omega)
     K(t) = ifft(K(\omega))
@@ -113,7 +125,7 @@ def calc_memory_fft(vel_tcf, frc_tcf, dt):
         Force time correlation function. <F(t),v(0)>
     dt: Float.
         Time window spacing (must be in same units as vel_tcf and frc_tcf)
-        
+
     Returns
     -------
     memory : Numpy Array.
@@ -121,14 +133,14 @@ def calc_memory_fft(vel_tcf, frc_tcf, dt):
     """
     if len(vel_tcf.shape) > 1 or len(frc_tcf.shape) > 1:
         raise ValueError("TCF input must be 1D Numpy Array")
-        
+
     #Calculate fourier transforms of velocity/force autocorrelation functions
     vel_matrix_fft = np.fft.fft(vel_tcf)
     frc_matrix_fft = np.fft.fft(frc_tcf)
-    
+
     #Calculate memory kernel
     memory = np.fft.ifft(-frc_matrix_fft/vel_matrix_fft,axis=0)
-    
+
     return memory/dt
 
 def calc_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
@@ -177,14 +189,11 @@ def calc_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
         
     # Loop through remaining indices
     for t in range(1, Nt-1):
-        flip_v = np.flip(vel_tcf_mid[1:t+1],axis=0)
-        
-        temp = - frc_tcf[t+1]/dt - np.sum( K[0:t] *  flip_v )
-              
-        K_t = vel_tcf_inv0 * temp
-           
-        K[t] = K_t
-    
+        # convolution sum via BLAS dot over the reversed midpoint window
+        temp = - frc_tcf[t+1]/dt - np.dot(K[0:t], vel_tcf_mid[t:0:-1])
+
+        K[t] = vel_tcf_inv0 * temp
+
     return K
 
 def calc_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
@@ -232,22 +241,105 @@ def calc_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     
     # Loop through remaining indices
     for t in range(1, Nt):
-            
-        flip_v = np.flip(dvel_tcf[1:t+1],axis=0)
-        
-        temp1 = K[0] * flip_v[0]
-        
-        if t==1:
-            temp2 = 0
+        # Convolution sum over the reversed dvel window via a BLAS dot product
+        # (flip_v[0]=dvel[t], flip_v[1:]=dvel[t-1:0:-1]); avoids the per-step
+        # flip and elementwise temporary of the original implementation.
+        temp1 = K[0] * dvel_tcf[t]
+
+        if t == 1:
+            temp2 = 0.0
         else:
-            temp2 = 2 * np.sum( K[1:t] * flip_v[1:] )
-        
+            temp2 = 2 * np.dot(K[1:t], dvel_tcf[t-1:0:-1])
+
         temp = -dfrc_tcf[t] - dt/2 * (temp1 + temp2)
-        
-        K_t = vel_invt * temp
-           
-        K[t] = K_t
-    
+
+        K[t] = vel_invt * temp
+
+    return K
+
+def _simpson_weights(n):
+    r"""
+    Composite quadrature weights for \int_0^{n*dt} h(tau) dtau ~ dt * sum_j w_j h_j,
+    on the (n+1) equally spaced nodes j = 0..n.
+
+    Uses composite Simpson's rule when n is even.  When n is odd it applies
+    Simpson over the first n-1 (even) intervals and the trapezoidal rule over
+    the final interval, so the scheme is well defined for every n while keeping
+    O(dt^4) accuracy on the bulk of the interval.  For n == 1 it reduces to the
+    trapezoidal rule.
+    """
+    w = np.zeros(n + 1)
+    if n == 0:
+        return w
+    if n % 2 == 0:
+        w[0] = 1/3; w[n] = 1/3
+        w[1:n:2] = 4/3
+        w[2:n:2] = 2/3
+    elif n == 1:
+        w[0] = 1/2; w[1] = 1/2
+    else:
+        m = n - 1  # even -> Simpson over [0, m*dt]
+        w[0] = 1/3; w[m] = 1/3
+        w[1:m:2] = 4/3
+        w[2:m:2] = 2/3
+        w[m] += 1/2  # + trapezoid over the last interval [m, n]
+        w[n] = 1/2
+    return w
+
+def calc_memory_dsimpson(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
+    r"""
+    Calculate memory kernel in real-time using the derivative formula and
+    Simpson (higher-order) quadrature.
+
+    Solves the same second-kind Volterra equation as ``calc_memory_dtrapz``,
+
+        -Cfv'(t) = K(t) C_v(0) + \int_0^t K(tau) C_v'(t-tau) dtau,
+
+    but discretizes the convolution integral with composite Simpson weights
+    (see ``_simpson_weights``) instead of the trapezoidal rule.  For smooth
+    kernels this improves the error from O(dt^2) to ~O(dt^4).
+
+    Parameters
+    ----------
+    dvel_tcf: Numpy Array. (Nt)
+        Time derivative of velocity time correlation function.
+    dfrc_tcf: Numpy Array. (Nt)
+        Time derivative of force time correlation function.
+    vel_tcf_0: Float.
+        Mean-square velocity, C_v(0).
+    dt: Float.
+        Time window spacing (must be in same units as vel_tcf and frc_tcf).
+    K_0: Numpy Array. Optional.
+        Initial value of memory kernel.
+
+    Returns
+    -------
+    K : Numpy Array.
+        Memory Kernel. K(t)
+    """
+    if len(dvel_tcf.shape) > 1 or len(dfrc_tcf.shape) > 1:
+        raise ValueError("TCF input must be a 1D Numpy Array")
+
+    Nt = np.size(dvel_tcf)
+    g = dvel_tcf          # C_v'(tau)
+    f = -dfrc_tcf         # right-hand side, -Cfv'(t)
+
+    K = np.zeros(Nt, dtype=np.float64)
+
+    # Set initial value (K(0) is not constrained by the quadrature)
+    if K_0 is not None:
+        K[0] = K_0
+    else:
+        K[0] = f[0] / vel_tcf_0
+
+    # March forward.  At step n the trapz/Simpson quadrature of the convolution
+    # is dt * sum_{j=0}^{n} w_j K[j] g[n-j]; the j=n term (weight w_n, g[0])
+    # multiplies the unknown K[n], so the update is implicit but scalar.
+    for n in range(1, Nt):
+        w = _simpson_weights(n)
+        known = dt * np.dot(w[:n] * K[:n], g[n:0:-1])
+        K[n] = (f[n] - known) / (vel_tcf_0 + dt * w[n] * g[0])
+
     return K
 
 def calc_matrix_memory_fft(vel_tcf, frc_tcf, dt):
@@ -325,14 +417,11 @@ def calc_matrix_memory_midpt(vel_tcf, frc_tcf, dt, K_0=None):
         
     # Loop through remaining indices
     for t in range(1, Nt):
-        flip_v = np.flip(vel_tcf_mid[1:t+1],axis=0)
-        
-        temp = - frc_tcf[t+1]/dt - np.einsum("tij,tjk->ik", K[0:t] , flip_v)
-              
-        K_t = np.linalg.solve( vel_tcf_mid[0].T, temp.T).T
-           
-        K[t] = K_t
-    
+        # convolution sum over the reversed midpoint window (no per-step flip)
+        temp = - frc_tcf[t+1]/dt - np.einsum("tij,tjk->ik", K[0:t], vel_tcf_mid[t:0:-1])
+
+        K[t] = np.linalg.solve( vel_tcf_mid[0].T, temp.T).T
+
     return K
 
 def calc_matrix_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
@@ -377,22 +466,18 @@ def calc_matrix_memory_dtrapz(dvel_tcf, dfrc_tcf, vel_tcf_0, dt, K_0=None):
     
     # Loop through remaining indices
     for t in range(1, Nt):
-            
-        flip_v = np.flip(dvel_tcf[1:t+1],axis=0)
-        
-        temp1 = np.einsum("ij,jk->ik", K[0] , flip_v[0])
-        
-        if t==1:
-            temp2 = 0
+        # convolution sum over the reversed dvel window (no per-step flip)
+        temp1 = K[0] @ dvel_tcf[t]
+
+        if t == 1:
+            temp2 = 0.0
         else:
-            temp2 = 2 * np.einsum("tij,tjk->ik", K[1:t] , flip_v[1:])
-        
+            temp2 = 2 * np.einsum("tij,tjk->ik", K[1:t], dvel_tcf[t-1:0:-1])
+
         temp = -dfrc_tcf[t] - dt/2 * (temp1 + temp2)
-        
-        K_t = np.dot(temp, vel_invt)
-           
-        K[t] = K_t
-    
+
+        K[t] = temp @ vel_invt
+
     return K
 
 ########## Useful matrix functions
@@ -432,7 +517,7 @@ def matrixexp(mat, t,  Hermitian=True, return_eig=False):
     diag[:,indx,indx] = np.exp( np.outer(t,eige) )
                   
     if Hermitian:
-        mexp = eigv @ diag @ eigv.T
+        mexp = eigv @ diag @ eigv.conj().T
     else:
         mexp = eigv @ diag @ np.linalg.inv(eigv)
     
@@ -477,7 +562,7 @@ def matrixexp_deriv(mat, t,  Hermitian=True, return_eig=False):
     diag[:,indx,indx] = np.exp( np.outer(t,eige) )/eige
                   
     if Hermitian:
-        mexp = eigv @ diag @ eigv.T
+        mexp = eigv @ diag @ eigv.conj().T
     else:
         mexp = eigv @ diag @ np.linalg.inv(eigv)
     
@@ -544,7 +629,7 @@ def matrixfunc(func, mat, t, Hermitian=True, return_eig=False):
     diag[:,indx,indx] = func( np.outer(t,eige) )
     
     if Hermitian:
-        mfunc = eigv @ diag @ eigv.T
+        mfunc = eigv @ diag @ eigv.conj().T
     else:
         mfunc = eigv @ diag @ np.linalg.inv(eigv)
 
@@ -582,7 +667,7 @@ def matrix_cos(modes, freq, t, Hermitian=True):
     M = np.zeros((Nt,Ndof,Ndof),dtype=np.float64)
     M[:,indx,indx] = np.cos( np.outer(t, freq ) ) 
     if Hermitian:
-        M = modes @ M @ modes.T
+        M = modes @ M @ modes.conj().T
     else:
         M = modes @ M @ np.linalg.inv(modes)
     return M
@@ -615,7 +700,7 @@ def matrix_sin(modes, freq, t, Hermitian=True):
     M = np.zeros((Nt,Ndof,Ndof),dtype=np.float64)
     M[:,indx,indx] = np.sin( np.outer(t, freq ) ) 
     if Hermitian:
-        M = modes @ M @ modes.T
+        M = modes @ M @ modes.conj().T
     else:
         M = modes @ M @ np.linalg.inv(modes)
     return M
@@ -668,7 +753,7 @@ def calc_ou_var(B, A, nt, dt, Avs = None, Asv = None, method="full"):
             # Calculate B @ B.T
             B_sq = B @ B.T
             integrand = A_mexp @ B_sq @ A_mexp.swapaxes(1,2)
-            var0 = np.trapz(integrand, t_arr, axis=0)
+            var0 = _trapezoid(integrand, t_arr, axis=0)
             statvar = np.real( Avs @ var0 @ Asv ) # stationary variance
         
     #If operators A, A.T, B, and B.T do commute
