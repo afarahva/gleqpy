@@ -13,7 +13,7 @@ with open(os.path.join(root, 'README.md'), 'r', encoding='utf-8') as f:
 
 setup(
     name='GLEqPy',
-    version='1.0.3',
+    version='1.1.0',
     author="Ardavan Farahvash",
     author_email="ardavanf95@gmail.com",
     maintainer="Ardavan Farahvash",
@@ -23,7 +23,7 @@ setup(
     long_description_content_type='text/markdown',
     license="MIT",
     url="https://github.com/afarahva/gleqpy/",
-    install_requires=['numpy','scipy'],
+    install_requires=['numpy>=2.0','scipy'],
     extras_require={'test': ['pytest', 'ase']},
     packages=["gleqpy","gleqpy/ase/","gleqpy/md/","gleqpy/memory/"],
     
