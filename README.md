@@ -20,6 +20,8 @@ and $\mathbf{R}$ is a correlated stochastic process.
 
 The figure above compares memory kernels, the black line was used as an input for a 
 simulation and blue/green lines were extracted by analyzing the data from that simulation.
+Note: differences here are by design, the lines can be made to match more closely by 
+running a longer simulation to converge better time correlation functions. 
 
 Pedagogical examples of how to set up, run, and analyze GLE simulations are provided in the 
 **examples** directory. Examples include toy simulations, GLE for solid dynamics with ASE, 
